@@ -15,7 +15,7 @@ type Item struct {
 	// LeadTop/LeadMain/LeadBottom are an OPTIONAL three-line badge for the row's
 	// leading slot — position only, no assumed content: a renderer that draws a
 	// plain row (targetlist) ignores them; one built around a prominent leading
-	// badge (targethour) reads them instead of Label for that slot. What goes in
+	// badge (targetdate) reads them instead of Label for that slot. What goes in
 	// them — a date, an hour, anything else — is the consumer's call, not this
 	// type's. Empty means "no badge" — Filter (below) never looks at these, so
 	// leaving them blank never breaks search.
