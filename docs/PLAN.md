@@ -3,8 +3,9 @@ PLAN: "feat!: plural Saver/Deleter and a new Updater for field patches"
 TAG: v0.2.0
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 2914517993170843901
+PR: https://github.com/tinywasm/view/pull/4
 ---
 
 > Este plan se despacha con el flujo CodeJob. Ver skill: agents-workflow.
