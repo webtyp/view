@@ -245,8 +245,12 @@ func Run(t *testing.T, f Factory) {
 		var savedRecord *MockRecord
 		for _, call := range caller.Calls {
 			if call.Op == "test_save_op" {
-				if mr, ok := call.Args.(*MockRecord); ok {
-					savedRecord = mr
+				if args, ok := call.Args.(model.Encodable); ok {
+					w := &recordInspectWriter{}
+					args.EncodeFields(w)
+					if len(w.recs) > 0 {
+						savedRecord = w.recs[0].(*MockRecord)
+					}
 				}
 			}
 		}
@@ -277,8 +281,12 @@ func Run(t *testing.T, f Factory) {
 		var savedRecord *MockRecord
 		for _, call := range caller.Calls {
 			if call.Op == "test_save_op" {
-				if mr, ok := call.Args.(*MockRecord); ok {
-					savedRecord = mr
+				if args, ok := call.Args.(model.Encodable); ok {
+					w := &recordInspectWriter{}
+					args.EncodeFields(w)
+					if len(w.recs) > 0 {
+						savedRecord = w.recs[0].(*MockRecord)
+					}
 				}
 			}
 		}
@@ -389,19 +397,21 @@ func Run(t *testing.T, f Factory) {
 		driver.Select("2")
 		driver.Delete()
 
-		var deletedRecord *MockRecord
+		var deletedIDs []string
 		for _, call := range caller.Calls {
 			if call.Op == "test_delete_op" {
-				if mr, ok := call.Args.(*MockRecord); ok {
-					deletedRecord = mr
+				if args, ok := call.Args.(model.Encodable); ok {
+					w := &recordInspectWriter{}
+					args.EncodeFields(w)
+					deletedIDs = w.ids
 				}
 			}
 		}
 
-		if deletedRecord == nil {
-			t.Errorf("expected a delete call with MockRecord payload")
-		} else if deletedRecord.ID != "2" || deletedRecord.Name != "Bob" {
-			t.Errorf("expected deleted record to be ID '2' Name 'Bob', got ID %q Name %q", deletedRecord.ID, deletedRecord.Name)
+		if len(deletedIDs) == 0 {
+			t.Errorf("expected a delete call with IDs payload")
+		} else if len(deletedIDs) != 1 || deletedIDs[0] != "2" {
+			t.Errorf("expected deleted ID to be '2', got %v", deletedIDs)
 		}
 	})
 
@@ -644,4 +654,132 @@ func Run(t *testing.T, f Factory) {
 			t.Errorf("expected presenter to not implement view.Deleter when WithDeleteOp is empty")
 		}
 	})
+
+	t.Run("plural_save_delete_and_update", func(t *testing.T) {
+		caller := &FakeCaller{
+			Reply: func(op string, into model.Decodable) {
+				if op == "test_list_op" {
+					l := into.(*MockList)
+					a := l.Append().(*MockRecord)
+					a.ID, a.Name = "1", "Alice"
+					b := l.Append().(*MockRecord)
+					b.ID, b.Name = "2", "Bob"
+				}
+			},
+		}
+		record := &MockRecord{}
+		p := view.New(
+			caller,
+			record,
+			"test_list_op",
+			func() model.ModelSlice { return &MockList{} },
+			view.WithSaveOp("test_save_op"),
+			view.WithUpdateOp("test_update_op"),
+			view.WithDeleteOp("test_delete_op"),
+		)
+
+		if err := p.Reload(); err != nil {
+			t.Fatalf("reload failed: %v", err)
+		}
+
+		s := p.(view.Saver)
+		u := p.(view.Updater)
+		d := p.(view.Deleter)
+
+		// Plural Save
+		r1 := &MockRecord{ID: "10", Name: "Ten"}
+		r2 := &MockRecord{ID: "11", Name: "Eleven"}
+		if err := s.Save(r1, r2); err != nil {
+			t.Fatalf("plural Save failed: %v", err)
+		}
+
+		// Plural Delete
+		if err := d.Delete("1", "2"); err != nil {
+			t.Fatalf("plural Delete failed: %v", err)
+		}
+
+		// Plural Update
+		patch := &MockRecord{Name: "Patched"}
+		if err := u.Update([]string{"1", "2"}, patch, []string{"name"}); err != nil {
+			t.Fatalf("plural Update failed: %v", err)
+		}
+
+		var saveCalls, updateCalls, deleteCalls int
+		for _, call := range caller.Calls {
+			switch call.Op {
+			case "test_save_op":
+				saveCalls++
+				w := &recordInspectWriter{}
+				call.Args.EncodeFields(w)
+				if len(w.recs) != 2 {
+					t.Errorf("expected 2 saved records in 1 call, got %d", len(w.recs))
+				}
+			case "test_update_op":
+				updateCalls++
+				w := &recordInspectWriter{}
+				call.Args.EncodeFields(w)
+				if len(w.ids) != 2 || len(w.fields) != 1 || w.fields[0] != "name" {
+					t.Errorf("expected 2 ids and 1 field in update call, got ids=%v fields=%v", w.ids, w.fields)
+				}
+			case "test_delete_op":
+				deleteCalls++
+				w := &recordInspectWriter{}
+				call.Args.EncodeFields(w)
+				if len(w.ids) != 2 {
+					t.Errorf("expected 2 deleted ids in 1 call, got %d", len(w.ids))
+				}
+			}
+		}
+
+		if saveCalls != 1 || updateCalls != 1 || deleteCalls != 1 {
+			t.Errorf("expected exactly 1 call each for save, update, delete; got save=%d update=%d delete=%d", saveCalls, updateCalls, deleteCalls)
+		}
+	})
 }
+
+type recordInspectWriter struct {
+	recs   []model.Encodable
+	ids    []string
+	fields []string
+	rec    model.Encodable
+}
+
+func (w *recordInspectWriter) String(name, val string)        {}
+func (w *recordInspectWriter) Int(name string, val int64)     {}
+func (w *recordInspectWriter) Float(name string, val float64) {}
+func (w *recordInspectWriter) Bool(name string, val bool)     {}
+func (w *recordInspectWriter) Bytes(name string, val []byte) {}
+func (w *recordInspectWriter) Null(name string)               {}
+func (w *recordInspectWriter) Raw(name, val string)           {}
+func (w *recordInspectWriter) Object(name string, val model.Encodable) {
+	if name == "record" {
+		w.rec = val
+	}
+}
+func (w *recordInspectWriter) Array(name string, n int) model.ArrayWriter {
+	return &inspectArrayWriter{parent: w, name: name}
+}
+
+type inspectArrayWriter struct {
+	parent *recordInspectWriter
+	name   string
+}
+
+func (a *inspectArrayWriter) String(val string) {
+	switch a.name {
+	case "ids":
+		a.parent.ids = append(a.parent.ids, val)
+	case "fields":
+		a.parent.fields = append(a.parent.fields, val)
+	}
+}
+func (a *inspectArrayWriter) Int(val int64)        {}
+func (a *inspectArrayWriter) Float(val float64)    {}
+func (a *inspectArrayWriter) Bool(val bool)        {}
+func (a *inspectArrayWriter) Bytes(val []byte)     {}
+func (a *inspectArrayWriter) Object(val model.Encodable) {
+	if a.name == "records" {
+		a.parent.recs = append(a.parent.recs, val)
+	}
+}
+func (a *inspectArrayWriter) Close() {}

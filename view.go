@@ -46,22 +46,40 @@ type Presenter interface {
 	Deselect()                    // clears the selection
 }
 
-// Saver represents the capability to save a record.
-// The renderer discovers it by type assertion at the seam.
+// Saver creates or replaces WHOLE records. Variadic, not single: the one-record
+// case is N=1, so there is exactly one write path to implement, test and reason
+// about. This is what the "+" new-record flow and the edit-one-record form use.
 type Saver interface {
-	Save(payload model.Model) error // synchronously ships the explicit payload to SaveOp
+	Save(recs ...model.Model) error
 }
 
-// Deleter represents the capability to delete a record.
-// The renderer discovers it by type assertion at the seam.
+// Updater patches ONLY the named columns across every id, in a single
+// statement. It is deliberately NOT Save with a partial record: sending whole
+// records to change one column reverts, in silence, every other column that
+// someone else changed since this client last reloaded — the classic lost
+// update. Naming the columns makes that impossible: what is not in fields is
+// never written.
+//
+// rec carries the values (it is the form's own record, already validated);
+// fields names the columns to write. Values stay inside the generated typed
+// struct — no name→value bag, no `any`, no reflection.
+//
+// fields holds Schema() field names and pairs directly with
+// form.DirtyFields(). An empty fields slice is an error, not a no-op.
+type Updater interface {
+	Update(ids []string, rec model.Model, fields []string) error
+}
+
+// Deleter removes records. Variadic for the same reason as Saver.
 type Deleter interface {
-	Delete(id string) error // ships the indexed record of id to DeleteOp; unknown id → error
+	Delete(ids ...string) error
 }
 
 type config struct {
 	title             string
 	searchPlaceholder string
 	saveOp            string
+	updateOp          string
 	deleteOp          string
 	args              func() model.Encodable
 }
@@ -87,6 +105,13 @@ func WithSearchPlaceholder(placeholder string) Option {
 func WithSaveOp(op string) Option {
 	return func(c *config) {
 		c.saveOp = op
+	}
+}
+
+// WithUpdateOp sets the field-patch operation.
+func WithUpdateOp(op string) Option {
+	return func(c *config) {
+		c.updateOp = op
 	}
 }
 
@@ -140,18 +165,30 @@ func New(
 		searchPlaceholder: cfg.searchPlaceholder,
 		args:              cfg.args,
 		saveOp:            cfg.saveOp,
+		updateOp:          cfg.updateOp,
 		deleteOp:          cfg.deleteOp,
-		index:             make(map[string]model.Model),
 	}
 
+	hasS := cfg.saveOp != ""
+	hasU := cfg.updateOp != ""
+	hasD := cfg.deleteOp != ""
+
 	switch {
-	case cfg.saveOp != "" && cfg.deleteOp != "":
-		return &crud{core: c} // Presenter + Saver + Deleter
-	case cfg.saveOp != "":
-		return &saveable{core: c} // Presenter + Saver
-	case cfg.deleteOp != "":
-		return &deletable{core: c} // Presenter + Deleter
+	case hasS && hasU && hasD:
+		return &crud{core: c}
+	case hasS && hasU:
+		return &saveableUpdatable{core: c}
+	case hasS && hasD:
+		return &saveableDeletable{core: c}
+	case hasU && hasD:
+		return &updatableDeletable{core: c}
+	case hasS:
+		return &saveable{core: c}
+	case hasU:
+		return &updatable{core: c}
+	case hasD:
+		return &deletable{core: c}
 	default:
-		return c // solo Presenter
+		return c
 	}
 }
