@@ -188,6 +188,18 @@ func (c *core) delete(ids ...string) error {
 	return <-ch
 }
 
+// The capability wrappers below are thin on purpose: every method delegates to
+// the matching core method, which is the ONE place each operation is written.
+// What varies between them is only the method SET, because that is what a
+// consumer's `if u, ok := p.(view.Updater); ok` reads.
+//
+// The count is 2^n-1 for n optional capabilities: 3 types for two, 7 for three,
+// and 15 if a fourth is ever added. That is the price of discovering
+// capabilities by type assertion rather than by a runtime `Can(...)` check —
+// and it is the right price here, because the assertion is what lets a
+// renderer decide at wiring time not to paint a control it could never run.
+// A fourth capability is the moment to stop and reconsider, not to type out
+// eight more structs.
 type saveable struct {
 	*core
 }
