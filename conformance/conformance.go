@@ -655,6 +655,21 @@ func Run(t *testing.T, f Factory) {
 		}
 	})
 
+	t.Run("no_update_capability_when_updateop_empty", func(t *testing.T) {
+		caller := &FakeCaller{}
+		record := &MockRecord{}
+		p := view.New(
+			caller,
+			record,
+			"test_list_op",
+			func() model.ModelSlice { return &MockList{} },
+		)
+
+		if _, ok := p.(view.Updater); ok {
+			t.Errorf("expected presenter to not implement view.Updater when WithUpdateOp is empty")
+		}
+	})
+
 	t.Run("plural_save_delete_and_update", func(t *testing.T) {
 		caller := &FakeCaller{
 			Reply: func(op string, into model.Decodable) {
