@@ -109,8 +109,8 @@ func TestCallerBackendMissingDeleteOpCarriesNoCapability(t *testing.T) {
 		view.Ops{List: "l", Save: "s", Update: "u"},
 		newMockList)
 
-	if _, ok := b.(view.BackendDeleter); ok {
-		t.Errorf("expected Backend without Delete op to not implement view.BackendDeleter")
+	if _, ok := b.(view.Deleter); ok {
+		t.Errorf("expected Backend without Delete op to not implement view.Deleter")
 	}
 
 	p := view.New(b, &conformance.MockRecord{}, view.WithTitle("t"))

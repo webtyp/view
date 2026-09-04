@@ -128,11 +128,11 @@ func (c *core) save(recs ...model.Model) error {
 		}
 	}
 
-	b, ok := c.backend.(BackendSaver)
+	b, ok := c.backend.(Saver)
 	if !ok {
-		return fmt.Err("view: Save: backend does not implement view.BackendSaver")
+		return fmt.Err("view: Save: backend does not implement view.Saver")
 	}
-	return b.Save(recs)
+	return b.Save(recs...)
 }
 
 func (c *core) update(ids []string, rec model.Model, fields []string) error {
@@ -146,9 +146,9 @@ func (c *core) update(ids []string, rec model.Model, fields []string) error {
 		return fmt.Err("view: Update record is nil")
 	}
 
-	b, ok := c.backend.(BackendUpdater)
+	b, ok := c.backend.(Updater)
 	if !ok {
-		return fmt.Err("view: Update: backend does not implement view.BackendUpdater")
+		return fmt.Err("view: Update: backend does not implement view.Updater")
 	}
 	return b.Update(ids, rec, fields)
 }
@@ -163,25 +163,15 @@ func (c *core) delete(ids ...string) error {
 		}
 	}
 
-	b, ok := c.backend.(BackendDeleter)
+	b, ok := c.backend.(Deleter)
 	if !ok {
-		return fmt.Err("view: Delete: backend does not implement view.BackendDeleter")
+		return fmt.Err("view: Delete: backend does not implement view.Deleter")
 	}
-	return b.Delete(ids)
+	return b.Delete(ids...)
 }
 
-// The capability wrappers below are thin on purpose: every method delegates to
-// the matching core method, which is the ONE place each operation is written.
-// What varies between them is only the method SET, because that is what a
-// consumer's `if u, ok := p.(view.Updater); ok` reads.
-//
-// The count is 2^n-1 for n optional capabilities: 3 types for two, 7 for three,
-// and 15 if a fourth is ever added. That is the price of discovering
-// capabilities by type assertion rather than by a runtime `Can(...)` check —
-// and it is the right price here, because the assertion is what lets a
-// renderer decide at wiring time not to paint a control it could never run.
-// A fourth capability is the moment to stop and reconsider, not to type out
-// eight more structs.
+// The capability wrappers below follow the pattern documented in backend.go:
+// thin structs whose only difference is the method SET. See it before editing.
 type saveable struct {
 	*core
 }

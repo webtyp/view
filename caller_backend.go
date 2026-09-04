@@ -107,18 +107,8 @@ func (b *callerBackend) delete(ids []string) error {
 	return <-ch
 }
 
-// The capability wrappers below are thin on purpose: every method delegates to
-// the matching callerBackend method, which is the ONE place each operation is
-// written. What varies between them is only the method SET, because that is
-// what view.New's `b.(BackendSaver)` assertion reads.
-//
-// The count is 2^n-1 for n optional capabilities: 3 types for two, 7 for three,
-// and 15 if a fourth is ever added. That is the price of discovering
-// capabilities by type assertion rather than by a runtime `Can(...)` check —
-// and it is the right price here, because the assertion is what lets view.New
-// return a Presenter carrying exactly the capabilities the remote side offers.
-// A fourth capability is the moment to stop and reconsider, not to type out
-// eight more structs.
+// The capability wrappers below follow the pattern documented in backend.go:
+// thin structs whose only difference is the method SET. See it before editing.
 type callerList struct {
 	*callerBackend
 }
@@ -135,7 +125,7 @@ func (b *callerSave) List() ([]model.Model, error) {
 	return b.list()
 }
 
-func (b *callerSave) Save(recs []model.Model) error {
+func (b *callerSave) Save(recs ...model.Model) error {
 	return b.save(recs)
 }
 
@@ -159,7 +149,7 @@ func (b *callerDelete) List() ([]model.Model, error) {
 	return b.list()
 }
 
-func (b *callerDelete) Delete(ids []string) error {
+func (b *callerDelete) Delete(ids ...string) error {
 	return b.delete(ids)
 }
 
@@ -171,7 +161,7 @@ func (b *callerSaveUpdate) List() ([]model.Model, error) {
 	return b.list()
 }
 
-func (b *callerSaveUpdate) Save(recs []model.Model) error {
+func (b *callerSaveUpdate) Save(recs ...model.Model) error {
 	return b.save(recs)
 }
 
@@ -187,11 +177,11 @@ func (b *callerSaveDelete) List() ([]model.Model, error) {
 	return b.list()
 }
 
-func (b *callerSaveDelete) Save(recs []model.Model) error {
+func (b *callerSaveDelete) Save(recs ...model.Model) error {
 	return b.save(recs)
 }
 
-func (b *callerSaveDelete) Delete(ids []string) error {
+func (b *callerSaveDelete) Delete(ids ...string) error {
 	return b.delete(ids)
 }
 
@@ -207,7 +197,7 @@ func (b *callerUpdateDelete) Update(ids []string, rec model.Model, fields []stri
 	return b.update(ids, rec, fields)
 }
 
-func (b *callerUpdateDelete) Delete(ids []string) error {
+func (b *callerUpdateDelete) Delete(ids ...string) error {
 	return b.delete(ids)
 }
 
@@ -219,7 +209,7 @@ func (b *callerCRUD) List() ([]model.Model, error) {
 	return b.list()
 }
 
-func (b *callerCRUD) Save(recs []model.Model) error {
+func (b *callerCRUD) Save(recs ...model.Model) error {
 	return b.save(recs)
 }
 
@@ -227,6 +217,6 @@ func (b *callerCRUD) Update(ids []string, rec model.Model, fields []string) erro
 	return b.update(ids, rec, fields)
 }
 
-func (b *callerCRUD) Delete(ids []string) error {
+func (b *callerCRUD) Delete(ids ...string) error {
 	return b.delete(ids)
 }

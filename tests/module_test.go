@@ -22,7 +22,7 @@ func TestModulePerspective(t *testing.T) {
 		})
 	p := view.New(b, record, view.WithTitle("t"))
 
-	// 1. Reload -> ListOp
+	// 1. Reload -> List
 	if err := p.Reload(); err != nil {
 		t.Fatalf("reload failed: %v", err)
 	}

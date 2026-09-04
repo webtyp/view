@@ -15,9 +15,9 @@ a defect — report it.
 |---|---|
 | Create a list/detail view for my model | `view.New(backend, &X{}, opts...)` where `backend` implements `view.Backend` |
 | Make my rows appear in the list | Implement `Item() view.Item` on the record type (`view.Itemizer`) |
-| Enable saving | Implement `Save(recs []model.Model) error` — the returned Presenter then satisfies `view.Saver` |
+| Enable saving | Implement `Save(recs ...model.Model) error` — the returned Presenter then satisfies `view.Saver` |
 | Enable field patches | Implement `Update(ids []string, rec model.Model, fields []string) error` — the Presenter then satisfies `view.Updater` |
-| Enable deleting | Implement `Delete(ids []string) error` — the returned Presenter then satisfies `view.Deleter` |
+| Enable deleting | Implement `Delete(ids ...string) error` — the returned Presenter then satisfies `view.Deleter` |
 | Know if the view can save/delete (renderer side) | `s, ok := p.(view.Saver)` / `d, ok := p.(view.Deleter)` |
 | Load / refresh the list | `p.Reload()` (synchronous, returns `error`) |
 | Pick a record and get its full model | `m := p.Select(id)` (`nil` if the id is unknown) |
@@ -47,7 +47,7 @@ func (s *deviceStore) List() ([]model.Model, error) {
 	return rows, err
 }
 
-func (s *deviceStore) Save(recs []model.Model) error {
+func (s *deviceStore) Save(recs ...model.Model) error {
 	for _, m := range recs {
 		if err := s.upsert(m.(*Device)); err != nil {
 			return err
@@ -60,7 +60,7 @@ func (s *deviceStore) Update(ids []string, rec model.Model, fields []string) err
 	return s.db.UpdateFields(rec, fields, storage.In("id", anyIDs(ids)))
 }
 
-func (s *deviceStore) Delete(ids []string) error {
+func (s *deviceStore) Delete(ids ...string) error {
 	return s.db.Delete(&Device{}, storage.In("id", anyIDs(ids)))
 }
 
@@ -81,6 +81,26 @@ Capabilities are **methods, not strings** — the renderer paints `+`/`🗑`/`�
 from what your backend implements, so a missing method is a compile-time fact.
 There is no string to misspell and no silent success-without-write: if the
 backend does not implement `Save`, the presenter simply is not a `view.Saver`.
+The contract is shared: a backend declares capabilities with
+`view.Saver`/`Updater`/`Deleter` — the same interfaces the renderer asserts on
+the presenter. One name per capability, used on both sides.
+
+## Migration note (v0.3.0 → v0.4.0)
+
+`BackendSaver`/`BackendUpdater`/`BackendDeleter` are gone; implement
+`Saver`/`Updater`/`Deleter` instead:
+
+```go
+// v0.3.0
+func (s *deviceStore) Save(recs []model.Model) error
+func (s *deviceStore) Delete(ids []string) error
+
+// v0.4.0 — add the ellipsis; bodies are unchanged
+func (s *deviceStore) Save(recs ...model.Model) error
+func (s *deviceStore) Delete(ids ...string) error
+```
+
+`Update` is unchanged.
 
 ## Migration note (from ≤ v0.2.x)
 
@@ -160,15 +180,16 @@ type Backend interface {
 	List() ([]model.Model, error)
 }
 
-// Optional write capabilities, discovered by type assertion.
-type BackendSaver interface {
-	Save(recs []model.Model) error
+// Optional write capabilities: the SAME interfaces a renderer asserts on the
+// Presenter. A backend declares what it can do by implementing them.
+type Saver interface {
+	Save(recs ...model.Model) error
 }
-type BackendUpdater interface {
+type Updater interface {
 	Update(ids []string, rec model.Model, fields []string) error
 }
-type BackendDeleter interface {
-	Delete(ids []string) error
+type Deleter interface {
+	Delete(ids ...string) error
 }
 
 // Ops names the remote operations a CallerBackend invokes. An empty name means
@@ -216,7 +237,7 @@ func (c *CatalogItem) Item() view.Item {
 type catalogStore struct{ /* … */ }
 
 func (s *catalogStore) List() ([]model.Model, error) { /* … */ }
-func (s *catalogStore) Save(recs []model.Model) error { /* … */ }
+func (s *catalogStore) Save(recs ...model.Model) error { /* … */ }
 
 // Step 3 — build the presenter. No projection loop, no cache, no fill:
 // the presenter lists through the backend and indexes id → model itself.

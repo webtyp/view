@@ -34,7 +34,7 @@ func (b *FakeBackend) List() ([]model.Model, error) {
 	return out, nil
 }
 
-func (b *FakeBackend) Save(recs []model.Model) error {
+func (b *FakeBackend) Save(recs ...model.Model) error {
 	if b.Err != nil {
 		return b.Err
 	}
@@ -52,7 +52,7 @@ func (b *FakeBackend) Update(ids []string, rec model.Model, fields []string) err
 	return nil
 }
 
-func (b *FakeBackend) Delete(ids []string) error {
+func (b *FakeBackend) Delete(ids ...string) error {
 	if b.Err != nil {
 		return b.Err
 	}
@@ -61,10 +61,10 @@ func (b *FakeBackend) Delete(ids []string) error {
 }
 
 var (
-	_ view.Backend        = (*FakeBackend)(nil)
-	_ view.BackendSaver   = (*FakeBackend)(nil)
-	_ view.BackendUpdater = (*FakeBackend)(nil)
-	_ view.BackendDeleter = (*FakeBackend)(nil)
+	_ view.Backend = (*FakeBackend)(nil)
+	_ view.Saver   = (*FakeBackend)(nil)
+	_ view.Updater = (*FakeBackend)(nil)
+	_ view.Deleter = (*FakeBackend)(nil)
 )
 
 // listOnlyBackend implements List and nothing else: the double for the
@@ -93,7 +93,7 @@ func (b *listSaveBackend) List() ([]model.Model, error) {
 	return out, nil
 }
 
-func (b *listSaveBackend) Save(recs []model.Model) error {
+func (b *listSaveBackend) Save(recs ...model.Model) error {
 	b.saved = append(b.saved, recs...)
 	return nil
 }
@@ -374,7 +374,7 @@ func Run(t *testing.T, f Factory) {
 		p := view.New(b, record)
 
 		if _, ok := p.(view.Saver); ok {
-			t.Errorf("expected presenter to not implement view.Saver when backend does not implement view.BackendSaver")
+			t.Errorf("expected presenter to not implement view.Saver when backend does not implement view.Saver")
 		}
 	})
 
@@ -539,7 +539,7 @@ func Run(t *testing.T, f Factory) {
 		p := view.New(b, record)
 
 		if _, ok := p.(view.Deleter); ok {
-			t.Errorf("expected presenter to not implement view.Deleter when backend does not implement view.BackendDeleter")
+			t.Errorf("expected presenter to not implement view.Deleter when backend does not implement view.Deleter")
 		}
 	})
 
@@ -549,23 +549,26 @@ func Run(t *testing.T, f Factory) {
 		p := view.New(b, record)
 
 		if _, ok := p.(view.Updater); ok {
-			t.Errorf("expected presenter to not implement view.Updater when backend does not implement view.BackendUpdater")
+			t.Errorf("expected presenter to not implement view.Updater when backend does not implement view.Updater")
 		}
 	})
 
 	t.Run("saver_capability_mirrors_backend", func(t *testing.T) {
 		b := &listSaveBackend{}
+		// The contract is genuinely shared: the backend itself satisfies the
+		// same interface the renderer asserts on the presenter.
+		var _ view.Saver = b
 		record := &MockRecord{}
 		p := view.New(b, record)
 
 		if _, ok := p.(view.Saver); !ok {
-			t.Errorf("expected presenter to implement view.Saver when backend implements view.BackendSaver")
+			t.Errorf("expected presenter to implement view.Saver when backend implements view.Saver")
 		}
 		if _, ok := p.(view.Updater); ok {
-			t.Errorf("expected presenter to not implement view.Updater when backend does not implement view.BackendUpdater")
+			t.Errorf("expected presenter to not implement view.Updater when backend does not implement view.Updater")
 		}
 		if _, ok := p.(view.Deleter); ok {
-			t.Errorf("expected presenter to not implement view.Deleter when backend does not implement view.BackendDeleter")
+			t.Errorf("expected presenter to not implement view.Deleter when backend does not implement view.Deleter")
 		}
 	})
 

@@ -23,7 +23,7 @@ func (s *memStore) List() ([]model.Model, error) {
 	return out, nil
 }
 
-func (s *memStore) Save(recs []model.Model) error {
+func (s *memStore) Save(recs ...model.Model) error {
 	for _, m := range recs {
 		rec := m.(*conformance.MockRecord)
 		replaced := false
@@ -61,7 +61,7 @@ func (s *memStore) Update(ids []string, rec model.Model, fields []string) error 
 	return nil
 }
 
-func (s *memStore) Delete(ids []string) error {
+func (s *memStore) Delete(ids ...string) error {
 	kept := s.rows[:0]
 	for _, row := range s.rows {
 		drop := false
