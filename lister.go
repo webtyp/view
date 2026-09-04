@@ -20,7 +20,7 @@ type Lister interface {
 
 // --- The capability-wrapper pattern -----------------------------------------
 //
-// The capability wrappers in presenter.go and caller_backend.go are thin on
+// The capability wrappers in presenter.go and caller_lister.go are thin on
 // purpose: every method delegates to the matching core method, which is the
 // ONE place each operation is written. What varies between them is only the
 // method SET, because that is what a consumer's `if u, ok :=
