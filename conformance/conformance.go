@@ -5,44 +5,98 @@ import (
 
 	"github.com/tinywasm/input"
 	"github.com/tinywasm/model"
-	"github.com/tinywasm/router"
 	"github.com/tinywasm/view"
 )
 
-// FakeCall records one invocation the suite (or a consumer's module test) can inspect.
-type FakeCall struct {
-	Op   string
-	Args model.Encodable
+// FakeBackend is a typed view.Backend test double recording typed calls. It
+// holds every capability (List/Save/Update/Delete) so a presenter built over
+// it carries every capability; capability-absence clauses below use the
+// purpose-built minimal doubles instead.
+type FakeBackend struct {
+	Rows []model.Model // what List returns
+
+	Calls         int
+	SavedRecords  []model.Model
+	UpdatedIDs    []string
+	UpdatedFields []string
+	UpdatedRecord model.Model
+	DeletedIDs    []string
+	Err           error // returned by every operation, for error-path clauses
 }
 
-// FakeCaller is a codec-free router.Caller test double. Unlike router/mock.Caller it does
-// NOT decode a wire response — it fills the typed target directly via Reply — so this
-// package (and any renderer or module that imports it for tests) depends only on model and
-// router, never a codec. That is the same discipline router/conformance keeps: the arnés of
-// a contract must not drag in an implementation.
-type FakeCaller struct {
-	Calls []FakeCall
-	// Reply fills `into` with canned TYPED data for op (no serialization); nil = no result.
-	Reply func(op string, into model.Decodable)
-	// Err, if set, is what every Call reports (and suppresses Reply).
-	Err error
-}
-
-func (c *FakeCaller) Call(op string, args model.Encodable, into model.Decodable, done func(err error)) {
-	c.Calls = append(c.Calls, FakeCall{Op: op, Args: args})
-	if c.Err == nil && c.Reply != nil && into != nil {
-		c.Reply(op, into)
+func (b *FakeBackend) List() ([]model.Model, error) {
+	b.Calls++
+	if b.Err != nil {
+		return nil, b.Err
 	}
-	if done != nil {
-		done(c.Err)
+	out := make([]model.Model, len(b.Rows))
+	copy(out, b.Rows)
+	return out, nil
+}
+
+func (b *FakeBackend) Save(recs []model.Model) error {
+	if b.Err != nil {
+		return b.Err
 	}
+	b.SavedRecords = append(b.SavedRecords, recs...)
+	return nil
 }
 
-func (c *FakeCaller) Dispatch(op string, args model.Encodable) {
-	c.Calls = append(c.Calls, FakeCall{Op: op, Args: args})
+func (b *FakeBackend) Update(ids []string, rec model.Model, fields []string) error {
+	if b.Err != nil {
+		return b.Err
+	}
+	b.UpdatedIDs = append(b.UpdatedIDs, ids...)
+	b.UpdatedFields = append(b.UpdatedFields, fields...)
+	b.UpdatedRecord = rec
+	return nil
 }
 
-var _ router.Caller = (*FakeCaller)(nil)
+func (b *FakeBackend) Delete(ids []string) error {
+	if b.Err != nil {
+		return b.Err
+	}
+	b.DeletedIDs = append(b.DeletedIDs, ids...)
+	return nil
+}
+
+var (
+	_ view.Backend        = (*FakeBackend)(nil)
+	_ view.BackendSaver   = (*FakeBackend)(nil)
+	_ view.BackendUpdater = (*FakeBackend)(nil)
+	_ view.BackendDeleter = (*FakeBackend)(nil)
+)
+
+// listOnlyBackend implements List and nothing else: the double for the
+// negative capability clauses below.
+type listOnlyBackend struct {
+	rows []model.Model
+}
+
+func (b *listOnlyBackend) List() ([]model.Model, error) {
+	out := make([]model.Model, len(b.rows))
+	copy(out, b.rows)
+	return out, nil
+}
+
+// listSaveBackend implements List+Save only: the double proving the mirror
+// rule (a backend with Save yields a Presenter that IS a Saver and is NOT an
+// Updater/Deleter).
+type listSaveBackend struct {
+	rows  []model.Model
+	saved []model.Model
+}
+
+func (b *listSaveBackend) List() ([]model.Model, error) {
+	out := make([]model.Model, len(b.rows))
+	copy(out, b.rows)
+	return out, nil
+}
+
+func (b *listSaveBackend) Save(recs []model.Model) error {
+	b.saved = append(b.saved, recs...)
+	return nil
+}
 
 // Factory builds the renderer under test around the presenter and returns a Driver.
 type Factory struct {
@@ -157,47 +211,27 @@ func (m *MockList) Append() model.Fielder {
 // Run executes the full set of conformance clauses.
 func Run(t *testing.T, f Factory) {
 	t.Run("mount_triggers_list_load", func(t *testing.T) {
-		caller := &FakeCaller{}
+		fb := &FakeBackend{}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
 
-		found := false
-		for _, call := range caller.Calls {
-			if call.Op == "test_list_op" {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("expected call to %q, but was not found in %v", "test_list_op", caller.Calls)
+		if fb.Calls == 0 {
+			t.Errorf("expected Mount to trigger a List call, got none")
 		}
 	})
 
 	t.Run("list_renders_item_labels", func(t *testing.T) {
-		caller := &FakeCaller{
-			Reply: func(op string, into model.Decodable) {
-				l := into.(*MockList)
-				a := l.Append().(*MockRecord)
-				a.ID, a.Name = "1", "Alice"
-				b := l.Append().(*MockRecord)
-				b.ID, b.Name = "2", "Bob"
+		fb := &FakeBackend{
+			Rows: []model.Model{
+				&MockRecord{ID: "1", Name: "Alice"},
+				&MockRecord{ID: "2", Name: "Bob"},
 			},
 		}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
@@ -209,26 +243,14 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("select_fills_form", func(t *testing.T) {
-		caller := &FakeCaller{
-			Reply: func(op string, into model.Decodable) {
-				if op == "test_list_op" {
-					l := into.(*MockList)
-					a := l.Append().(*MockRecord)
-					a.ID, a.Name = "1", "Alice"
-					b := l.Append().(*MockRecord)
-					b.ID, b.Name = "2", "Bob"
-				}
+		fb := &FakeBackend{
+			Rows: []model.Model{
+				&MockRecord{ID: "1", Name: "Alice"},
+				&MockRecord{ID: "2", Name: "Bob"},
 			},
 		}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-			view.WithSaveOp("test_save_op"),
-			view.WithDeleteOp("test_delete_op"),
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
@@ -242,57 +264,34 @@ func Run(t *testing.T, f Factory) {
 		driver.SetField("name", "Bob Updated")
 		driver.Save()
 
-		var savedRecord *MockRecord
-		for _, call := range caller.Calls {
-			if call.Op == "test_save_op" {
-				if args, ok := call.Args.(model.Encodable); ok {
-					w := &recordInspectWriter{}
-					args.EncodeFields(w)
-					if len(w.recs) > 0 {
-						savedRecord = w.recs[0].(*MockRecord)
-					}
-				}
-			}
+		if len(fb.SavedRecords) == 0 {
+			t.Fatalf("expected a save call with MockRecord payload")
 		}
-
-		if savedRecord == nil {
-			t.Errorf("expected a save call with MockRecord payload")
-		} else if savedRecord.ID != "2" || savedRecord.Name != "Bob Updated" {
+		savedRecord, ok := fb.SavedRecords[0].(*MockRecord)
+		if !ok {
+			t.Fatalf("expected saved record to be a *MockRecord, got %T", fb.SavedRecords[0])
+		}
+		if savedRecord.ID != "2" || savedRecord.Name != "Bob Updated" {
 			t.Errorf("expected saved record to be ID '2' (loaded by Select) Name 'Bob Updated' (edited), got ID %q Name %q", savedRecord.ID, savedRecord.Name)
 		}
 	})
 
 	t.Run("save_ships_form_values", func(t *testing.T) {
-		caller := &FakeCaller{}
+		fb := &FakeBackend{}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-			view.WithSaveOp("test_save_op"),
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
 		driver.SetField("name", "X")
 		driver.Save()
 
-		var savedRecord *MockRecord
-		for _, call := range caller.Calls {
-			if call.Op == "test_save_op" {
-				if args, ok := call.Args.(model.Encodable); ok {
-					w := &recordInspectWriter{}
-					args.EncodeFields(w)
-					if len(w.recs) > 0 {
-						savedRecord = w.recs[0].(*MockRecord)
-					}
-				}
-			}
-		}
-
-		if savedRecord == nil {
+		if len(fb.SavedRecords) == 0 {
 			t.Fatalf("expected a save call with MockRecord payload")
+		}
+		savedRecord, ok := fb.SavedRecords[0].(*MockRecord)
+		if !ok {
+			t.Fatalf("expected saved record to be a *MockRecord, got %T", fb.SavedRecords[0])
 		}
 		if savedRecord.Name != "X" {
 			t.Errorf("expected saved record to have Name 'X', got %q", savedRecord.Name)
@@ -308,54 +307,32 @@ func Run(t *testing.T, f Factory) {
 	// live signals against a baseline snapshotted on load; view/mock.Renderer
 	// compares its form map against a baseline snapshotted on Select/Deselect.
 	t.Run("unchanged_save_does_not_ship", func(t *testing.T) {
-		caller := &FakeCaller{
-			Reply: func(op string, into model.Decodable) {
-				if op == "test_list_op" {
-					l := into.(*MockList)
-					a := l.Append().(*MockRecord)
-					a.ID, a.Name = "1", "Alice"
-				}
+		fb := &FakeBackend{
+			Rows: []model.Model{
+				&MockRecord{ID: "1", Name: "Alice"},
 			},
 		}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-			view.WithSaveOp("test_save_op"),
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
 		driver.Select("1")
 		driver.Save() // no SetField at all — nothing changed since the load
 
-		for _, call := range caller.Calls {
-			if call.Op == "test_save_op" {
-				t.Fatalf("expected no save call when nothing changed since Select, got one")
-			}
+		if len(fb.SavedRecords) != 0 {
+			t.Fatalf("expected no save call when nothing changed since Select, got one")
 		}
 	})
 
 	t.Run("revert_edit_is_not_dirty", func(t *testing.T) {
-		caller := &FakeCaller{
-			Reply: func(op string, into model.Decodable) {
-				if op == "test_list_op" {
-					l := into.(*MockList)
-					a := l.Append().(*MockRecord)
-					a.ID, a.Name = "1", "Alice"
-				}
+		fb := &FakeBackend{
+			Rows: []model.Model{
+				&MockRecord{ID: "1", Name: "Alice"},
 			},
 		}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-			view.WithSaveOp("test_save_op"),
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
@@ -364,89 +341,51 @@ func Run(t *testing.T, f Factory) {
 		driver.SetField("name", "Alice") // back to the value Select loaded
 		driver.Save()
 
-		for _, call := range caller.Calls {
-			if call.Op == "test_save_op" {
-				t.Fatalf("expected no save call after editing then reverting to the loaded value, got one")
-			}
+		if len(fb.SavedRecords) != 0 {
+			t.Fatalf("expected no save call after editing then reverting to the loaded value, got one")
 		}
 	})
 
 	t.Run("delete_ships_selected_record", func(t *testing.T) {
-		caller := &FakeCaller{
-			Reply: func(op string, into model.Decodable) {
-				if op == "test_list_op" {
-					l := into.(*MockList)
-					a := l.Append().(*MockRecord)
-					a.ID, a.Name = "1", "Alice"
-					b := l.Append().(*MockRecord)
-					b.ID, b.Name = "2", "Bob"
-				}
+		fb := &FakeBackend{
+			Rows: []model.Model{
+				&MockRecord{ID: "1", Name: "Alice"},
+				&MockRecord{ID: "2", Name: "Bob"},
 			},
 		}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-			view.WithDeleteOp("test_delete_op"),
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
 		driver.Select("2")
 		driver.Delete()
 
-		var deletedIDs []string
-		for _, call := range caller.Calls {
-			if call.Op == "test_delete_op" {
-				if args, ok := call.Args.(model.Encodable); ok {
-					w := &recordInspectWriter{}
-					args.EncodeFields(w)
-					deletedIDs = w.ids
-				}
-			}
-		}
-
-		if len(deletedIDs) == 0 {
+		if len(fb.DeletedIDs) == 0 {
 			t.Errorf("expected a delete call with IDs payload")
-		} else if len(deletedIDs) != 1 || deletedIDs[0] != "2" {
-			t.Errorf("expected deleted ID to be '2', got %v", deletedIDs)
+		} else if len(fb.DeletedIDs) != 1 || fb.DeletedIDs[0] != "2" {
+			t.Errorf("expected deleted ID to be '2', got %v", fb.DeletedIDs)
 		}
 	})
 
-	t.Run("no_save_capability_when_saveop_empty", func(t *testing.T) {
-		caller := &FakeCaller{}
+	t.Run("no_save_capability_without_saver", func(t *testing.T) {
+		b := &listOnlyBackend{}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-		)
+		p := view.New(b, record)
 
 		if _, ok := p.(view.Saver); ok {
-			t.Errorf("expected presenter to not implement view.Saver when WithSaveOp is empty")
+			t.Errorf("expected presenter to not implement view.Saver when backend does not implement view.BackendSaver")
 		}
 	})
 
 	t.Run("deselect_clears_selection", func(t *testing.T) {
-		caller := &FakeCaller{
-			Reply: func(op string, into model.Decodable) {
-				if op == "test_list_op" {
-					l := into.(*MockList)
-					a := l.Append().(*MockRecord)
-					a.ID, a.Name = "1", "Alice"
-				}
+		fb := &FakeBackend{
+			Rows: []model.Model{
+				&MockRecord{ID: "1", Name: "Alice"},
 			},
 		}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
@@ -461,22 +400,13 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("select_unknown_id_returns_nil", func(t *testing.T) {
-		caller := &FakeCaller{
-			Reply: func(op string, into model.Decodable) {
-				if op == "test_list_op" {
-					l := into.(*MockList)
-					a := l.Append().(*MockRecord)
-					a.ID, a.Name = "1", "Alice"
-				}
+		fb := &FakeBackend{
+			Rows: []model.Model{
+				&MockRecord{ID: "1", Name: "Alice"},
 			},
 		}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
@@ -494,24 +424,14 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("filter_matches_label_and_description", func(t *testing.T) {
-		caller := &FakeCaller{
-			Reply: func(op string, into model.Decodable) {
-				if op == "test_list_op" {
-					l := into.(*MockList)
-					a := l.Append().(*MockRecord)
-					a.ID, a.Name = "1", "Alice" // description will be "Desc of Alice"
-					b := l.Append().(*MockRecord)
-					b.ID, b.Name = "2", "Bob" // description will be "Desc of Bob"
-				}
+		fb := &FakeBackend{
+			Rows: []model.Model{
+				&MockRecord{ID: "1", Name: "Alice"}, // description will be "Desc of Alice"
+				&MockRecord{ID: "2", Name: "Bob"},   // description will be "Desc of Bob"
 			},
 		}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
@@ -536,15 +456,9 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("delete_unknown_id_errors", func(t *testing.T) {
-		caller := &FakeCaller{}
+		fb := &FakeBackend{}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-			view.WithDeleteOp("test_delete_op"),
-		)
+		p := view.New(fb, record)
 
 		d, ok := p.(view.Deleter)
 		if !ok {
@@ -556,10 +470,8 @@ func Run(t *testing.T, f Factory) {
 			t.Errorf("expected error deleting unknown id, got nil")
 		}
 
-		for _, call := range caller.Calls {
-			if call.Op == "test_delete_op" {
-				t.Errorf("unexpected delete op call on unknown ID")
-			}
+		if len(fb.DeletedIDs) != 0 {
+			t.Errorf("unexpected delete reaching the backend on unknown ID")
 		}
 	})
 
@@ -567,14 +479,9 @@ func Run(t *testing.T, f Factory) {
 	// can start typing immediately — a standard behavior every renderer must
 	// implement identically, not a crudview-specific nicety.
 	t.Run("new_focuses_first_field", func(t *testing.T) {
-		caller := &FakeCaller{}
+		fb := &FakeBackend{}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
@@ -586,22 +493,13 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("edit_focuses_first_field", func(t *testing.T) {
-		caller := &FakeCaller{
-			Reply: func(op string, into model.Decodable) {
-				if op == "test_list_op" {
-					l := into.(*MockList)
-					a := l.Append().(*MockRecord)
-					a.ID, a.Name = "1", "Alice"
-				}
+		fb := &FakeBackend{
+			Rows: []model.Model{
+				&MockRecord{ID: "1", Name: "Alice"},
 			},
 		}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
@@ -616,14 +514,9 @@ func Run(t *testing.T, f Factory) {
 	// focused field after "↺" is a leftover from the draft that should have
 	// been fully abandoned. Standard behavior, not crudview-specific.
 	t.Run("cancel_clears_focus", func(t *testing.T) {
-		caller := &FakeCaller{}
+		fb := &FakeBackend{}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-		)
+		p := view.New(fb, record)
 
 		driver := f.New(t, p)
 		driver.Mount()
@@ -640,58 +533,51 @@ func Run(t *testing.T, f Factory) {
 		}
 	})
 
-	t.Run("no_delete_capability_when_deleteop_empty", func(t *testing.T) {
-		caller := &FakeCaller{}
+	t.Run("no_delete_capability_without_deleter", func(t *testing.T) {
+		b := &listOnlyBackend{}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-		)
+		p := view.New(b, record)
 
 		if _, ok := p.(view.Deleter); ok {
-			t.Errorf("expected presenter to not implement view.Deleter when WithDeleteOp is empty")
+			t.Errorf("expected presenter to not implement view.Deleter when backend does not implement view.BackendDeleter")
 		}
 	})
 
-	t.Run("no_update_capability_when_updateop_empty", func(t *testing.T) {
-		caller := &FakeCaller{}
+	t.Run("no_update_capability_without_updater", func(t *testing.T) {
+		b := &listOnlyBackend{}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-		)
+		p := view.New(b, record)
 
 		if _, ok := p.(view.Updater); ok {
-			t.Errorf("expected presenter to not implement view.Updater when WithUpdateOp is empty")
+			t.Errorf("expected presenter to not implement view.Updater when backend does not implement view.BackendUpdater")
+		}
+	})
+
+	t.Run("saver_capability_mirrors_backend", func(t *testing.T) {
+		b := &listSaveBackend{}
+		record := &MockRecord{}
+		p := view.New(b, record)
+
+		if _, ok := p.(view.Saver); !ok {
+			t.Errorf("expected presenter to implement view.Saver when backend implements view.BackendSaver")
+		}
+		if _, ok := p.(view.Updater); ok {
+			t.Errorf("expected presenter to not implement view.Updater when backend does not implement view.BackendUpdater")
+		}
+		if _, ok := p.(view.Deleter); ok {
+			t.Errorf("expected presenter to not implement view.Deleter when backend does not implement view.BackendDeleter")
 		}
 	})
 
 	t.Run("plural_save_delete_and_update", func(t *testing.T) {
-		caller := &FakeCaller{
-			Reply: func(op string, into model.Decodable) {
-				if op == "test_list_op" {
-					l := into.(*MockList)
-					a := l.Append().(*MockRecord)
-					a.ID, a.Name = "1", "Alice"
-					b := l.Append().(*MockRecord)
-					b.ID, b.Name = "2", "Bob"
-				}
+		fb := &FakeBackend{
+			Rows: []model.Model{
+				&MockRecord{ID: "1", Name: "Alice"},
+				&MockRecord{ID: "2", Name: "Bob"},
 			},
 		}
 		record := &MockRecord{}
-		p := view.New(
-			caller,
-			record,
-			"test_list_op",
-			func() model.ModelSlice { return &MockList{} },
-			view.WithSaveOp("test_save_op"),
-			view.WithUpdateOp("test_update_op"),
-			view.WithDeleteOp("test_delete_op"),
-		)
+		p := view.New(fb, record)
 
 		if err := p.Reload(); err != nil {
 			t.Fatalf("reload failed: %v", err)
@@ -707,10 +593,16 @@ func Run(t *testing.T, f Factory) {
 		if err := s.Save(r1, r2); err != nil {
 			t.Fatalf("plural Save failed: %v", err)
 		}
+		if len(fb.SavedRecords) != 2 {
+			t.Errorf("expected 2 saved records in 1 call, got %d", len(fb.SavedRecords))
+		}
 
 		// Plural Delete
 		if err := d.Delete("1", "2"); err != nil {
 			t.Fatalf("plural Delete failed: %v", err)
+		}
+		if len(fb.DeletedIDs) != 2 {
+			t.Errorf("expected 2 deleted ids in 1 call, got %d", len(fb.DeletedIDs))
 		}
 
 		// Plural Update
@@ -718,83 +610,8 @@ func Run(t *testing.T, f Factory) {
 		if err := u.Update([]string{"1", "2"}, patch, []string{"name"}); err != nil {
 			t.Fatalf("plural Update failed: %v", err)
 		}
-
-		var saveCalls, updateCalls, deleteCalls int
-		for _, call := range caller.Calls {
-			switch call.Op {
-			case "test_save_op":
-				saveCalls++
-				w := &recordInspectWriter{}
-				call.Args.EncodeFields(w)
-				if len(w.recs) != 2 {
-					t.Errorf("expected 2 saved records in 1 call, got %d", len(w.recs))
-				}
-			case "test_update_op":
-				updateCalls++
-				w := &recordInspectWriter{}
-				call.Args.EncodeFields(w)
-				if len(w.ids) != 2 || len(w.fields) != 1 || w.fields[0] != "name" {
-					t.Errorf("expected 2 ids and 1 field in update call, got ids=%v fields=%v", w.ids, w.fields)
-				}
-			case "test_delete_op":
-				deleteCalls++
-				w := &recordInspectWriter{}
-				call.Args.EncodeFields(w)
-				if len(w.ids) != 2 {
-					t.Errorf("expected 2 deleted ids in 1 call, got %d", len(w.ids))
-				}
-			}
-		}
-
-		if saveCalls != 1 || updateCalls != 1 || deleteCalls != 1 {
-			t.Errorf("expected exactly 1 call each for save, update, delete; got save=%d update=%d delete=%d", saveCalls, updateCalls, deleteCalls)
+		if len(fb.UpdatedIDs) != 2 || len(fb.UpdatedFields) != 1 || fb.UpdatedFields[0] != "name" {
+			t.Errorf("expected 2 ids and 1 field in update call, got ids=%v fields=%v", fb.UpdatedIDs, fb.UpdatedFields)
 		}
 	})
 }
-
-type recordInspectWriter struct {
-	recs   []model.Encodable
-	ids    []string
-	fields []string
-	rec    model.Encodable
-}
-
-func (w *recordInspectWriter) String(name, val string)        {}
-func (w *recordInspectWriter) Int(name string, val int64)     {}
-func (w *recordInspectWriter) Float(name string, val float64) {}
-func (w *recordInspectWriter) Bool(name string, val bool)     {}
-func (w *recordInspectWriter) Bytes(name string, val []byte) {}
-func (w *recordInspectWriter) Null(name string)               {}
-func (w *recordInspectWriter) Raw(name, val string)           {}
-func (w *recordInspectWriter) Object(name string, val model.Encodable) {
-	if name == "record" {
-		w.rec = val
-	}
-}
-func (w *recordInspectWriter) Array(name string, n int) model.ArrayWriter {
-	return &inspectArrayWriter{parent: w, name: name}
-}
-
-type inspectArrayWriter struct {
-	parent *recordInspectWriter
-	name   string
-}
-
-func (a *inspectArrayWriter) String(val string) {
-	switch a.name {
-	case "ids":
-		a.parent.ids = append(a.parent.ids, val)
-	case "fields":
-		a.parent.fields = append(a.parent.fields, val)
-	}
-}
-func (a *inspectArrayWriter) Int(val int64)        {}
-func (a *inspectArrayWriter) Float(val float64)    {}
-func (a *inspectArrayWriter) Bool(val bool)        {}
-func (a *inspectArrayWriter) Bytes(val []byte)     {}
-func (a *inspectArrayWriter) Object(val model.Encodable) {
-	if a.name == "records" {
-		a.parent.recs = append(a.parent.recs, val)
-	}
-}
-func (a *inspectArrayWriter) Close() {}

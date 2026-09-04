@@ -4,7 +4,9 @@ import (
 	"github.com/tinywasm/model"
 )
 
-// saveArgs carries N whole records.
+// saveArgs carries N whole records. It is a wire shape, written and read
+// only by caller_backend.go; nothing else in the ecosystem should need to
+// know it.
 type saveArgs struct {
 	recs []model.Model
 }
@@ -19,7 +21,9 @@ func (a *saveArgs) EncodeFields(w model.FieldWriter) {
 }
 
 // updateArgs is the wire shape of a field patch: which rows, which columns,
-// and a record carrying the values.
+// and a record carrying the values. It is a wire shape, written and read
+// only by caller_backend.go; nothing else in the ecosystem should need to
+// know it.
 type updateArgs struct {
 	ids    []string
 	fields []string
@@ -40,7 +44,9 @@ func (a *updateArgs) EncodeFields(w model.FieldWriter) {
 	w.Object("record", a.rec)
 }
 
-// deleteArgs carries N ids to remove.
+// deleteArgs carries N ids to remove. It is a wire shape, written and read
+// only by caller_backend.go; nothing else in the ecosystem should need to
+// know it.
 type deleteArgs struct {
 	ids []string
 }

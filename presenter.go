@@ -3,7 +3,6 @@ package view
 import (
 	"github.com/tinywasm/fmt"
 	"github.com/tinywasm/model"
-	"github.com/tinywasm/router"
 )
 
 // indexEntry pairs a record with its id. A slice of these replaces what used
@@ -15,16 +14,10 @@ type indexEntry struct {
 }
 
 type core struct {
-	caller            router.Caller
+	backend           Backend
 	record            model.Model
-	listOp            string
-	newList           func() model.ModelSlice
 	title             string
 	searchPlaceholder string
-	saveOp            string
-	updateOp          string
-	deleteOp          string
-	args              func() model.Encodable
 
 	items    []Item
 	selected string
@@ -52,38 +45,21 @@ func (p *core) Selected() string {
 }
 
 func (p *core) Reload() error {
-	var listArgs model.Encodable
-	if p.args != nil {
-		listArgs = p.args()
-	}
-
-	list := p.newList()
-	dec, ok := list.(model.Decodable)
-	if !ok {
-		return fmt.Err("view: list returned by newList does not implement model.Decodable")
-	}
-
-	ch := make(chan error, 1)
-	p.caller.Call(p.listOp, listArgs, dec, func(err error) { ch <- err })
-	if err := <-ch; err != nil {
+	rows, err := p.backend.List()
+	if err != nil {
 		return err
 	}
 
 	p.items = p.items[:0]
-	p.index = make([]indexEntry, 0, list.Len())
-	for i := 0; i < list.Len(); i++ {
-		row := list.At(i)
+	p.index = make([]indexEntry, 0, len(rows))
+	for _, row := range rows {
 		iz, ok := row.(Itemizer)
 		if !ok {
 			return fmt.Err("view: Reload: row type", rowName(row), "does not implement view.Itemizer")
 		}
-		m, ok := row.(model.Model)
-		if !ok {
-			return fmt.Err("view: Reload: row type", rowName(row), "does not implement model.Model")
-		}
 		it := iz.Item()
 		p.items = append(p.items, it)
-		p.index = append(p.index, indexEntry{id: it.ID, rec: m})
+		p.index = append(p.index, indexEntry{id: it.ID, rec: row})
 	}
 
 	return nil
@@ -152,9 +128,11 @@ func (c *core) save(recs ...model.Model) error {
 		}
 	}
 
-	ch := make(chan error, 1)
-	c.caller.Call(c.saveOp, &saveArgs{recs: recs}, nil, func(err error) { ch <- err })
-	return <-ch
+	b, ok := c.backend.(BackendSaver)
+	if !ok {
+		return fmt.Err("view: Save: backend does not implement view.BackendSaver")
+	}
+	return b.Save(recs)
 }
 
 func (c *core) update(ids []string, rec model.Model, fields []string) error {
@@ -168,9 +146,11 @@ func (c *core) update(ids []string, rec model.Model, fields []string) error {
 		return fmt.Err("view: Update record is nil")
 	}
 
-	ch := make(chan error, 1)
-	c.caller.Call(c.updateOp, &updateArgs{ids: ids, fields: fields, rec: rec}, nil, func(err error) { ch <- err })
-	return <-ch
+	b, ok := c.backend.(BackendUpdater)
+	if !ok {
+		return fmt.Err("view: Update: backend does not implement view.BackendUpdater")
+	}
+	return b.Update(ids, rec, fields)
 }
 
 func (c *core) delete(ids ...string) error {
@@ -183,9 +163,11 @@ func (c *core) delete(ids ...string) error {
 		}
 	}
 
-	ch := make(chan error, 1)
-	c.caller.Call(c.deleteOp, &deleteArgs{ids: ids}, nil, func(err error) { ch <- err })
-	return <-ch
+	b, ok := c.backend.(BackendDeleter)
+	if !ok {
+		return fmt.Err("view: Delete: backend does not implement view.BackendDeleter")
+	}
+	return b.Delete(ids)
 }
 
 // The capability wrappers below are thin on purpose: every method delegates to

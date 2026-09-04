@@ -2,7 +2,6 @@ package view
 
 import (
 	"github.com/tinywasm/model"
-	"github.com/tinywasm/router"
 )
 
 // Item is ONE projected row of the list — the neutral form any renderer can draw.
@@ -78,10 +77,6 @@ type Deleter interface {
 type config struct {
 	title             string
 	searchPlaceholder string
-	saveOp            string
-	updateOp          string
-	deleteOp          string
-	args              func() model.Encodable
 }
 
 // Option is a functional configuration option for New.
@@ -101,54 +96,23 @@ func WithSearchPlaceholder(placeholder string) Option {
 	}
 }
 
-// WithSaveOp sets the save operation.
-func WithSaveOp(op string) Option {
-	return func(c *config) {
-		c.saveOp = op
-	}
-}
-
-// WithUpdateOp sets the field-patch operation.
-func WithUpdateOp(op string) Option {
-	return func(c *config) {
-		c.updateOp = op
-	}
-}
-
-// WithDeleteOp sets the delete operation.
-func WithDeleteOp(op string) Option {
-	return func(c *config) {
-		c.deleteOp = op
-	}
-}
-
-// WithArgs sets the function to retrieve arguments for the list operation.
-func WithArgs(args func() model.Encodable) Option {
-	return func(c *config) {
-		c.args = args
-	}
-}
-
-// New builds the presenter. Mandatory collaborators are positional;
-// a nil/empty mandatory value panics at construction — a loud development diagnostic.
+// New builds the presenter over a Backend. Mandatory collaborators are
+// positional; a nil/empty mandatory value panics — a loud development
+// diagnostic.
+//
+// The Presenter's capabilities MIRROR the backend's: it is a Saver iff b
+// implements BackendSaver, and so on. There is no configuration that can claim
+// a capability the backend does not have.
 func New(
-	caller router.Caller,
+	b Backend,
 	record model.Model,
-	listOp string,
-	newList func() model.ModelSlice,
 	opts ...Option,
 ) Presenter {
-	if caller == nil {
-		panic("view: New: caller is required")
+	if b == nil {
+		panic("view: New: backend is required")
 	}
 	if model.IsNil(record) {
 		panic("view: New: record is required")
-	}
-	if listOp == "" {
-		panic("view: New: listOp is required")
-	}
-	if newList == nil {
-		panic("view: New: newList is required")
 	}
 
 	cfg := &config{}
@@ -157,21 +121,15 @@ func New(
 	}
 
 	c := &core{
-		caller:            caller,
+		backend:           b,
 		record:            record,
-		listOp:            listOp,
-		newList:           newList,
 		title:             cfg.title,
 		searchPlaceholder: cfg.searchPlaceholder,
-		args:              cfg.args,
-		saveOp:            cfg.saveOp,
-		updateOp:          cfg.updateOp,
-		deleteOp:          cfg.deleteOp,
 	}
 
-	hasS := cfg.saveOp != ""
-	hasU := cfg.updateOp != ""
-	hasD := cfg.deleteOp != ""
+	_, hasS := b.(BackendSaver)
+	_, hasU := b.(BackendUpdater)
+	_, hasD := b.(BackendDeleter)
 
 	switch {
 	case hasS && hasU && hasD:

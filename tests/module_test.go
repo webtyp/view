@@ -15,16 +15,12 @@ func TestModulePerspective(t *testing.T) {
 	}
 	record := &conformance.MockRecord{}
 
-	p := view.New(
-		caller,
-		record,
-		"list_items",
+	b := view.NewCallerBackend(caller,
+		view.Ops{List: "list_items", Save: "save_item", Delete: "delete_item"},
 		func() model.ModelSlice {
 			return &conformance.MockList{}
-		},
-		view.WithSaveOp("save_item"),
-		view.WithDeleteOp("delete_item"),
-	)
+		})
+	p := view.New(b, record, view.WithTitle("t"))
 
 	// 1. Reload -> ListOp
 	if err := p.Reload(); err != nil {

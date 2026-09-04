@@ -7,6 +7,7 @@ import (
 	"github.com/tinywasm/model"
 	"github.com/tinywasm/router"
 	"github.com/tinywasm/view"
+	"github.com/tinywasm/view/conformance"
 )
 
 type dummyCallerCall struct {
@@ -47,7 +48,7 @@ type dummyRecord struct {
 }
 
 func (r *dummyRecord) ModelName() string { return "dummyRecord" }
-func (r *dummyRecord) IsNil() bool        { return r == nil }
+func (r *dummyRecord) IsNil() bool       { return r == nil }
 func (r *dummyRecord) Schema() []model.Field {
 	return []model.Field{
 		{Name: "id", Type: input.Text()},
@@ -68,11 +69,11 @@ type dummyList struct {
 	items []*dummyRecord
 }
 
-func (l *dummyList) IsNil() bool            { return l == nil }
-func (l *dummyList) Schema() []model.Field  { return nil }
-func (l *dummyList) Pointers() []any        { return nil }
+func (l *dummyList) IsNil() bool           { return l == nil }
+func (l *dummyList) Schema() []model.Field { return nil }
+func (l *dummyList) Pointers() []any       { return nil }
 func (l *dummyList) DecodeFields(r model.FieldReader) {}
-func (l *dummyList) Len() int               { return len(l.items) }
+func (l *dummyList) Len() int              { return len(l.items) }
 func (l *dummyList) At(i int) model.Fielder { return l.items[i] }
 func (l *dummyList) Append() model.Fielder {
 	it := &dummyRecord{}
@@ -81,17 +82,10 @@ func (l *dummyList) Append() model.Fielder {
 }
 
 func setupView(caller *dummyCaller) view.Presenter {
-	return view.New(
-		caller,
-		&dummyRecord{},
-		"list_op",
-		func() model.ModelSlice {
-			return &dummyList{}
-		},
-		view.WithSaveOp("save_op"),
-		view.WithUpdateOp("update_op"),
-		view.WithDeleteOp("delete_op"),
-	)
+	b := view.NewCallerBackend(caller,
+		view.Ops{List: "list_op", Save: "save_op", Update: "update_op", Delete: "delete_op"},
+		func() model.ModelSlice { return &dummyList{} })
+	return view.New(b, &dummyRecord{}, view.WithTitle("t"))
 }
 
 func TestSaveRejectsAnEmptyBatch(t *testing.T) {
@@ -123,6 +117,10 @@ func TestSaveShipsEveryRecordInOneCall(t *testing.T) {
 	}
 	if caller.calls[0].op != "save_op" {
 		t.Errorf("expected op 'save_op', got %q", caller.calls[0].op)
+	}
+	pairs := conformance.Payload(caller.calls[0].args)
+	if !conformance.Has(pairs, "name", "A") || !conformance.Has(pairs, "name", "B") || !conformance.Has(pairs, "name", "C") {
+		t.Errorf("expected all three records' fields in the wire payload, got %v", pairs)
 	}
 }
 
@@ -165,6 +163,10 @@ func TestUpdateShipsIDsFieldsAndRecord(t *testing.T) {
 	}
 	if caller.calls[0].op != "update_op" {
 		t.Errorf("expected op 'update_op', got %q", caller.calls[0].op)
+	}
+	pairs := conformance.Payload(caller.calls[0].args)
+	if !conformance.Has(pairs, "ids", "1") || !conformance.Has(pairs, "ids", "2") || !conformance.Has(pairs, "fields", "name") || !conformance.Has(pairs, "name", "Patched") {
+		t.Errorf("expected ids, fields and record fields in the wire payload, got %v", pairs)
 	}
 }
 
@@ -220,5 +222,9 @@ func TestDeleteShipsEveryIDInOneCall(t *testing.T) {
 	}
 	if caller.calls[0].op != "delete_op" {
 		t.Errorf("expected op 'delete_op', got %q", caller.calls[0].op)
+	}
+	pairs := conformance.Payload(caller.calls[0].args)
+	if !conformance.Has(pairs, "ids", "1") || !conformance.Has(pairs, "ids", "2") || !conformance.Has(pairs, "ids", "3") {
+		t.Errorf("expected all three ids in the wire payload, got %v", pairs)
 	}
 }
