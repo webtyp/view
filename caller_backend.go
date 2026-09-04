@@ -6,8 +6,8 @@ import (
 	"github.com/tinywasm/router"
 )
 
-// Ops names the remote operations a CallerBackend invokes. An empty name means
-// the remote side does not offer that operation, and the returned Backend will
+// Ops names the remote operations a CallerLister invokes. An empty name means
+// the remote side does not offer that operation, and the returned Lister will
 // not carry the matching capability.
 type Ops struct {
 	List   string
@@ -16,57 +16,57 @@ type Ops struct {
 	Delete string
 }
 
-// NewCallerBackend adapts a router.Caller (mcp, http, any transport) to the
+// NewCallerLister adapts a router.Caller (mcp, http, any transport) to the
 // domain seam. It is the single place that translates a typed call into an
 // operation name plus a wire envelope — no consumer writes that mapping again.
 //
 // newList builds the empty slice the transport decodes into; that is a codec
 // concern, which is why it lives here and not in New.
 //
-// Ops.List is required. The returned Backend implements exactly the write
+// Ops.List is required. The returned Lister implements exactly the write
 // capabilities whose op names are non-empty, so view.New's assertions stay
 // honest for a remote backend too.
-func NewCallerBackend(c router.Caller, ops Ops, newList func() model.ModelSlice) Backend {
+func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) Lister {
 	if c == nil {
-		panic("view: NewCallerBackend: caller is required")
+		panic("view: NewCallerLister: caller is required")
 	}
 	if ops.List == "" {
-		panic("view: NewCallerBackend: Ops.List is required")
+		panic("view: NewCallerLister: Ops.List is required")
 	}
 	if newList == nil {
-		panic("view: NewCallerBackend: newList is required")
+		panic("view: NewCallerLister: newList is required")
 	}
-	cb := &callerBackend{caller: c, ops: ops, newList: newList}
+	cb := &callerLister{caller: c, ops: ops, newList: newList}
 	hasS := ops.Save != ""
 	hasU := ops.Update != ""
 	hasD := ops.Delete != ""
 	switch {
 	case hasS && hasU && hasD:
-		return &callerCRUD{callerBackend: cb}
+		return &callerCRUD{callerLister: cb}
 	case hasS && hasU:
-		return &callerSaveUpdate{callerBackend: cb}
+		return &callerSaveUpdate{callerLister: cb}
 	case hasS && hasD:
-		return &callerSaveDelete{callerBackend: cb}
+		return &callerSaveDelete{callerLister: cb}
 	case hasU && hasD:
-		return &callerUpdateDelete{callerBackend: cb}
+		return &callerUpdateDelete{callerLister: cb}
 	case hasS:
-		return &callerSave{callerBackend: cb}
+		return &callerSave{callerLister: cb}
 	case hasU:
-		return &callerUpdate{callerBackend: cb}
+		return &callerUpdate{callerLister: cb}
 	case hasD:
-		return &callerDelete{callerBackend: cb}
+		return &callerDelete{callerLister: cb}
 	default:
-		return &callerList{callerBackend: cb}
+		return &callerList{callerLister: cb}
 	}
 }
 
-type callerBackend struct {
+type callerLister struct {
 	caller  router.Caller
 	ops     Ops
 	newList func() model.ModelSlice
 }
 
-func (b *callerBackend) list() ([]model.Model, error) {
+func (b *callerLister) list() ([]model.Model, error) {
 	list := b.newList()
 	dec, ok := list.(model.Decodable)
 	if !ok {
@@ -89,28 +89,28 @@ func (b *callerBackend) list() ([]model.Model, error) {
 	return rows, nil
 }
 
-func (b *callerBackend) save(recs []model.Model) error {
+func (b *callerLister) save(recs []model.Model) error {
 	ch := make(chan error, 1)
 	b.caller.Call(b.ops.Save, &saveArgs{recs: recs}, nil, func(err error) { ch <- err })
 	return <-ch
 }
 
-func (b *callerBackend) update(ids []string, rec model.Model, fields []string) error {
+func (b *callerLister) update(ids []string, rec model.Model, fields []string) error {
 	ch := make(chan error, 1)
 	b.caller.Call(b.ops.Update, &updateArgs{ids: ids, fields: fields, rec: rec}, nil, func(err error) { ch <- err })
 	return <-ch
 }
 
-func (b *callerBackend) delete(ids []string) error {
+func (b *callerLister) delete(ids []string) error {
 	ch := make(chan error, 1)
 	b.caller.Call(b.ops.Delete, &deleteArgs{ids: ids}, nil, func(err error) { ch <- err })
 	return <-ch
 }
 
-// The capability wrappers below follow the pattern documented in backend.go:
+// The capability wrappers below follow the pattern documented in lister.go:
 // thin structs whose only difference is the method SET. See it before editing.
 type callerList struct {
-	*callerBackend
+	*callerLister
 }
 
 func (b *callerList) List() ([]model.Model, error) {
@@ -118,7 +118,7 @@ func (b *callerList) List() ([]model.Model, error) {
 }
 
 type callerSave struct {
-	*callerBackend
+	*callerLister
 }
 
 func (b *callerSave) List() ([]model.Model, error) {
@@ -130,7 +130,7 @@ func (b *callerSave) Save(recs ...model.Model) error {
 }
 
 type callerUpdate struct {
-	*callerBackend
+	*callerLister
 }
 
 func (b *callerUpdate) List() ([]model.Model, error) {
@@ -142,7 +142,7 @@ func (b *callerUpdate) Update(ids []string, rec model.Model, fields []string) er
 }
 
 type callerDelete struct {
-	*callerBackend
+	*callerLister
 }
 
 func (b *callerDelete) List() ([]model.Model, error) {
@@ -154,7 +154,7 @@ func (b *callerDelete) Delete(ids ...string) error {
 }
 
 type callerSaveUpdate struct {
-	*callerBackend
+	*callerLister
 }
 
 func (b *callerSaveUpdate) List() ([]model.Model, error) {
@@ -170,7 +170,7 @@ func (b *callerSaveUpdate) Update(ids []string, rec model.Model, fields []string
 }
 
 type callerSaveDelete struct {
-	*callerBackend
+	*callerLister
 }
 
 func (b *callerSaveDelete) List() ([]model.Model, error) {
@@ -186,7 +186,7 @@ func (b *callerSaveDelete) Delete(ids ...string) error {
 }
 
 type callerUpdateDelete struct {
-	*callerBackend
+	*callerLister
 }
 
 func (b *callerUpdateDelete) List() ([]model.Model, error) {
@@ -202,7 +202,7 @@ func (b *callerUpdateDelete) Delete(ids ...string) error {
 }
 
 type callerCRUD struct {
-	*callerBackend
+	*callerLister
 }
 
 func (b *callerCRUD) List() ([]model.Model, error) {

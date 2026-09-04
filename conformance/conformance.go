@@ -8,11 +8,11 @@ import (
 	"github.com/tinywasm/view"
 )
 
-// FakeBackend is a typed view.Backend test double recording typed calls. It
+// FakeLister is a typed view.Lister test double recording typed calls. It
 // holds every capability (List/Save/Update/Delete) so a presenter built over
 // it carries every capability; capability-absence clauses below use the
 // purpose-built minimal doubles instead.
-type FakeBackend struct {
+type FakeLister struct {
 	Rows []model.Model // what List returns
 
 	Calls         int
@@ -24,7 +24,7 @@ type FakeBackend struct {
 	Err           error // returned by every operation, for error-path clauses
 }
 
-func (b *FakeBackend) List() ([]model.Model, error) {
+func (b *FakeLister) List() ([]model.Model, error) {
 	b.Calls++
 	if b.Err != nil {
 		return nil, b.Err
@@ -34,7 +34,7 @@ func (b *FakeBackend) List() ([]model.Model, error) {
 	return out, nil
 }
 
-func (b *FakeBackend) Save(recs ...model.Model) error {
+func (b *FakeLister) Save(recs ...model.Model) error {
 	if b.Err != nil {
 		return b.Err
 	}
@@ -42,7 +42,7 @@ func (b *FakeBackend) Save(recs ...model.Model) error {
 	return nil
 }
 
-func (b *FakeBackend) Update(ids []string, rec model.Model, fields []string) error {
+func (b *FakeLister) Update(ids []string, rec model.Model, fields []string) error {
 	if b.Err != nil {
 		return b.Err
 	}
@@ -52,7 +52,7 @@ func (b *FakeBackend) Update(ids []string, rec model.Model, fields []string) err
 	return nil
 }
 
-func (b *FakeBackend) Delete(ids ...string) error {
+func (b *FakeLister) Delete(ids ...string) error {
 	if b.Err != nil {
 		return b.Err
 	}
@@ -61,39 +61,39 @@ func (b *FakeBackend) Delete(ids ...string) error {
 }
 
 var (
-	_ view.Backend = (*FakeBackend)(nil)
-	_ view.Saver   = (*FakeBackend)(nil)
-	_ view.Updater = (*FakeBackend)(nil)
-	_ view.Deleter = (*FakeBackend)(nil)
+	_ view.Lister  = (*FakeLister)(nil)
+	_ view.Saver   = (*FakeLister)(nil)
+	_ view.Updater = (*FakeLister)(nil)
+	_ view.Deleter = (*FakeLister)(nil)
 )
 
-// listOnlyBackend implements List and nothing else: the double for the
+// listOnlyLister implements List and nothing else: the double for the
 // negative capability clauses below.
-type listOnlyBackend struct {
+type listOnlyLister struct {
 	rows []model.Model
 }
 
-func (b *listOnlyBackend) List() ([]model.Model, error) {
+func (b *listOnlyLister) List() ([]model.Model, error) {
 	out := make([]model.Model, len(b.rows))
 	copy(out, b.rows)
 	return out, nil
 }
 
-// listSaveBackend implements List+Save only: the double proving the mirror
+// listSaveLister implements List+Save only: the double proving the mirror
 // rule (a backend with Save yields a Presenter that IS a Saver and is NOT an
 // Updater/Deleter).
-type listSaveBackend struct {
+type listSaveLister struct {
 	rows  []model.Model
 	saved []model.Model
 }
 
-func (b *listSaveBackend) List() ([]model.Model, error) {
+func (b *listSaveLister) List() ([]model.Model, error) {
 	out := make([]model.Model, len(b.rows))
 	copy(out, b.rows)
 	return out, nil
 }
 
-func (b *listSaveBackend) Save(recs ...model.Model) error {
+func (b *listSaveLister) Save(recs ...model.Model) error {
 	b.saved = append(b.saved, recs...)
 	return nil
 }
@@ -211,7 +211,7 @@ func (m *MockList) Append() model.Fielder {
 // Run executes the full set of conformance clauses.
 func Run(t *testing.T, f Factory) {
 	t.Run("mount_triggers_list_load", func(t *testing.T) {
-		fb := &FakeBackend{}
+		fb := &FakeLister{}
 		record := &MockRecord{}
 		p := view.New(fb, record)
 
@@ -224,7 +224,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("list_renders_item_labels", func(t *testing.T) {
-		fb := &FakeBackend{
+		fb := &FakeLister{
 			Rows: []model.Model{
 				&MockRecord{ID: "1", Name: "Alice"},
 				&MockRecord{ID: "2", Name: "Bob"},
@@ -243,7 +243,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("select_fills_form", func(t *testing.T) {
-		fb := &FakeBackend{
+		fb := &FakeLister{
 			Rows: []model.Model{
 				&MockRecord{ID: "1", Name: "Alice"},
 				&MockRecord{ID: "2", Name: "Bob"},
@@ -277,7 +277,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("save_ships_form_values", func(t *testing.T) {
-		fb := &FakeBackend{}
+		fb := &FakeLister{}
 		record := &MockRecord{}
 		p := view.New(fb, record)
 
@@ -307,7 +307,7 @@ func Run(t *testing.T, f Factory) {
 	// live signals against a baseline snapshotted on load; view/mock.Renderer
 	// compares its form map against a baseline snapshotted on Select/Deselect.
 	t.Run("unchanged_save_does_not_ship", func(t *testing.T) {
-		fb := &FakeBackend{
+		fb := &FakeLister{
 			Rows: []model.Model{
 				&MockRecord{ID: "1", Name: "Alice"},
 			},
@@ -326,7 +326,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("revert_edit_is_not_dirty", func(t *testing.T) {
-		fb := &FakeBackend{
+		fb := &FakeLister{
 			Rows: []model.Model{
 				&MockRecord{ID: "1", Name: "Alice"},
 			},
@@ -347,7 +347,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("delete_ships_selected_record", func(t *testing.T) {
-		fb := &FakeBackend{
+		fb := &FakeLister{
 			Rows: []model.Model{
 				&MockRecord{ID: "1", Name: "Alice"},
 				&MockRecord{ID: "2", Name: "Bob"},
@@ -369,7 +369,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("no_save_capability_without_saver", func(t *testing.T) {
-		b := &listOnlyBackend{}
+		b := &listOnlyLister{}
 		record := &MockRecord{}
 		p := view.New(b, record)
 
@@ -379,7 +379,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("deselect_clears_selection", func(t *testing.T) {
-		fb := &FakeBackend{
+		fb := &FakeLister{
 			Rows: []model.Model{
 				&MockRecord{ID: "1", Name: "Alice"},
 			},
@@ -400,7 +400,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("select_unknown_id_returns_nil", func(t *testing.T) {
-		fb := &FakeBackend{
+		fb := &FakeLister{
 			Rows: []model.Model{
 				&MockRecord{ID: "1", Name: "Alice"},
 			},
@@ -424,7 +424,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("filter_matches_label_and_description", func(t *testing.T) {
-		fb := &FakeBackend{
+		fb := &FakeLister{
 			Rows: []model.Model{
 				&MockRecord{ID: "1", Name: "Alice"}, // description will be "Desc of Alice"
 				&MockRecord{ID: "2", Name: "Bob"},   // description will be "Desc of Bob"
@@ -456,7 +456,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("delete_unknown_id_errors", func(t *testing.T) {
-		fb := &FakeBackend{}
+		fb := &FakeLister{}
 		record := &MockRecord{}
 		p := view.New(fb, record)
 
@@ -479,7 +479,7 @@ func Run(t *testing.T, f Factory) {
 	// can start typing immediately — a standard behavior every renderer must
 	// implement identically, not a crudview-specific nicety.
 	t.Run("new_focuses_first_field", func(t *testing.T) {
-		fb := &FakeBackend{}
+		fb := &FakeLister{}
 		record := &MockRecord{}
 		p := view.New(fb, record)
 
@@ -493,7 +493,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("edit_focuses_first_field", func(t *testing.T) {
-		fb := &FakeBackend{
+		fb := &FakeLister{
 			Rows: []model.Model{
 				&MockRecord{ID: "1", Name: "Alice"},
 			},
@@ -514,7 +514,7 @@ func Run(t *testing.T, f Factory) {
 	// focused field after "↺" is a leftover from the draft that should have
 	// been fully abandoned. Standard behavior, not crudview-specific.
 	t.Run("cancel_clears_focus", func(t *testing.T) {
-		fb := &FakeBackend{}
+		fb := &FakeLister{}
 		record := &MockRecord{}
 		p := view.New(fb, record)
 
@@ -534,7 +534,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("no_delete_capability_without_deleter", func(t *testing.T) {
-		b := &listOnlyBackend{}
+		b := &listOnlyLister{}
 		record := &MockRecord{}
 		p := view.New(b, record)
 
@@ -544,7 +544,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("no_update_capability_without_updater", func(t *testing.T) {
-		b := &listOnlyBackend{}
+		b := &listOnlyLister{}
 		record := &MockRecord{}
 		p := view.New(b, record)
 
@@ -554,7 +554,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("saver_capability_mirrors_backend", func(t *testing.T) {
-		b := &listSaveBackend{}
+		b := &listSaveLister{}
 		// The contract is genuinely shared: the backend itself satisfies the
 		// same interface the renderer asserts on the presenter.
 		var _ view.Saver = b
@@ -573,7 +573,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	t.Run("plural_save_delete_and_update", func(t *testing.T) {
-		fb := &FakeBackend{
+		fb := &FakeLister{
 			Rows: []model.Model{
 				&MockRecord{ID: "1", Name: "Alice"},
 				&MockRecord{ID: "2", Name: "Bob"},

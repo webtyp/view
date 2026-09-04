@@ -15,7 +15,7 @@ func TestModulePerspective(t *testing.T) {
 	}
 	record := &conformance.MockRecord{}
 
-	b := view.NewCallerBackend(caller,
+	b := view.NewCallerLister(caller,
 		view.Ops{List: "list_items", Save: "save_item", Delete: "delete_item"},
 		func() model.ModelSlice {
 			return &conformance.MockList{}

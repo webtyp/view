@@ -2,7 +2,7 @@ package view
 
 import "github.com/tinywasm/model"
 
-// Backend is what a view needs from the application: the records to show.
+// Lister is what a view needs from the application: the records to show.
 // Mandatory — a view with nothing to list is not a view.
 //
 // Writing is optional and declared by implementing the SAME capability
@@ -12,7 +12,7 @@ import "github.com/tinywasm/model"
 // view.New mirrors the backend's set onto the Presenter it returns. A missing
 // method is a compile-time fact, not a configuration string that can be
 // misspelled.
-type Backend interface {
+type Lister interface {
 	// List returns every record, newest-first or in whatever order the
 	// application considers natural. view projects them through Itemizer.
 	List() ([]model.Model, error)

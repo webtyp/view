@@ -9,7 +9,7 @@ import (
 )
 
 // memStore is a small REAL in-memory backend: a slice of records, not an
-// opaque stub. It proves the Backend seam carries a consumer from list
+// opaque stub. It proves the Lister seam carries a consumer from list
 // through every write and back to list.
 type memStore struct {
 	rows []*conformance.MockRecord
@@ -78,7 +78,7 @@ func (s *memStore) Delete(ids ...string) error {
 	return nil
 }
 
-func TestBackendListSaveUpdateDelete(t *testing.T) {
+func TestListerListSaveUpdateDelete(t *testing.T) {
 	store := &memStore{rows: []*conformance.MockRecord{
 		{ID: "1", Name: "Alice"},
 	}}

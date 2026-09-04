@@ -14,7 +14,7 @@ type indexEntry struct {
 }
 
 type core struct {
-	backend           Backend
+	lister            Lister
 	record            model.Model
 	title             string
 	searchPlaceholder string
@@ -45,7 +45,7 @@ func (p *core) Selected() string {
 }
 
 func (p *core) Reload() error {
-	rows, err := p.backend.List()
+	rows, err := p.lister.List()
 	if err != nil {
 		return err
 	}
@@ -128,9 +128,9 @@ func (c *core) save(recs ...model.Model) error {
 		}
 	}
 
-	b, ok := c.backend.(Saver)
+	b, ok := c.lister.(Saver)
 	if !ok {
-		return fmt.Err("view: Save: backend does not implement view.Saver")
+		return fmt.Err("view: Save: lister does not implement view.Saver")
 	}
 	return b.Save(recs...)
 }
@@ -146,9 +146,9 @@ func (c *core) update(ids []string, rec model.Model, fields []string) error {
 		return fmt.Err("view: Update record is nil")
 	}
 
-	b, ok := c.backend.(Updater)
+	b, ok := c.lister.(Updater)
 	if !ok {
-		return fmt.Err("view: Update: backend does not implement view.Updater")
+		return fmt.Err("view: Update: lister does not implement view.Updater")
 	}
 	return b.Update(ids, rec, fields)
 }
@@ -163,14 +163,14 @@ func (c *core) delete(ids ...string) error {
 		}
 	}
 
-	b, ok := c.backend.(Deleter)
+	b, ok := c.lister.(Deleter)
 	if !ok {
-		return fmt.Err("view: Delete: backend does not implement view.Deleter")
+		return fmt.Err("view: Delete: lister does not implement view.Deleter")
 	}
 	return b.Delete(ids...)
 }
 
-// The capability wrappers below follow the pattern documented in backend.go:
+// The capability wrappers below follow the pattern documented in lister.go:
 // thin structs whose only difference is the method SET. See it before editing.
 type saveable struct {
 	*core

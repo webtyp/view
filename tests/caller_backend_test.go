@@ -39,9 +39,9 @@ var _ router.Caller = (*recordCaller)(nil)
 
 func newMockList() model.ModelSlice { return &conformance.MockList{} }
 
-func TestCallerBackendTransport(t *testing.T) {
+func TestCallerListerTransport(t *testing.T) {
 	caller := &recordCaller{}
-	b := view.NewCallerBackend(caller,
+	b := view.NewCallerLister(caller,
 		view.Ops{List: "l", Save: "s", Update: "u", Delete: "d"},
 		newMockList)
 	p := view.New(b, &conformance.MockRecord{}, view.WithTitle("t"))
@@ -103,14 +103,14 @@ func TestCallerBackendTransport(t *testing.T) {
 	}
 }
 
-func TestCallerBackendMissingDeleteOpCarriesNoCapability(t *testing.T) {
+func TestCallerListerMissingDeleteOpCarriesNoCapability(t *testing.T) {
 	caller := &recordCaller{}
-	b := view.NewCallerBackend(caller,
+	b := view.NewCallerLister(caller,
 		view.Ops{List: "l", Save: "s", Update: "u"},
 		newMockList)
 
 	if _, ok := b.(view.Deleter); ok {
-		t.Errorf("expected Backend without Delete op to not implement view.Deleter")
+		t.Errorf("expected Lister without Delete op to not implement view.Deleter")
 	}
 
 	p := view.New(b, &conformance.MockRecord{}, view.WithTitle("t"))

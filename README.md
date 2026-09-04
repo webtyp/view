@@ -13,7 +13,7 @@ a defect — report it.
 
 | I want to… | Use |
 |---|---|
-| Create a list/detail view for my model | `view.New(backend, &X{}, opts...)` where `backend` implements `view.Backend` |
+| Create a list/detail view for my model | `view.New(lister, &X{}, opts...)` where `lister` implements `view.Lister` |
 | Make my rows appear in the list | Implement `Item() view.Item` on the record type (`view.Itemizer`) |
 | Enable saving | Implement `Save(recs ...model.Model) error` — the returned Presenter then satisfies `view.Saver` |
 | Enable field patches | Implement `Update(ids []string, rec model.Model, fields []string) error` — the Presenter then satisfies `view.Updater` |
@@ -23,7 +23,7 @@ a defect — report it.
 | Pick a record and get its full model | `m := p.Select(id)` (`nil` if the id is unknown) |
 | Clear the selection | `p.Deselect()` |
 | Filter the list as the user types | `p.Filter(term)` (local, case-insensitive over Label+Description) |
-| Connect over a transport (mcp, http) | `view.NewCallerBackend(caller, view.Ops{…}, newList)` then `view.New(b, &X{}, …)` |
+| Connect over a transport (mcp, http) | `view.NewCallerLister(caller, view.Ops{…}, newList)` then `view.New(l, &X{}, …)` |
 | Show an error/success message | Renderer's job: branch on the `error` returned by `Reload`/`Save`/`Delete` |
 | Test a renderer implementation | `conformance.Run(t, factory)` — it must pass every clause |
 | Simulate a view without a browser | `view/mock.Renderer` |
@@ -32,7 +32,7 @@ a defect — report it.
 
 Two cases, side by side.
 
-**In-process** — implement `Backend` (+ the capabilities you have) directly
+**In-process** — implement `Lister` (+ the capabilities you have) directly
 on your store. There is no operation name to spell, no envelope to unpack:
 
 ```go
@@ -71,19 +71,26 @@ view.New(&deviceStore{db: deviceDB}, &Device{}, view.WithTitle("Computadores"))
 owns, then build the view over it:
 
 ```go
-b := view.NewCallerBackend(caller,
+l := view.NewCallerLister(caller,
 	view.Ops{List: "device.list", Save: "device.save", Delete: "device.delete"},
 	func() model.ModelSlice { return &DeviceList{} })
 view.New(b, &Device{}, view.WithTitle("Computadores"))
 ```
 
 Capabilities are **methods, not strings** — the renderer paints `+`/`🗑`/`✏`
-from what your backend implements, so a missing method is a compile-time fact.
+from what your lister implements, so a missing method is a compile-time fact.
 There is no string to misspell and no silent success-without-write: if the
-backend does not implement `Save`, the presenter simply is not a `view.Saver`.
-The contract is shared: a backend declares capabilities with
+lister does not implement `Save`, the presenter simply is not a `view.Saver`.
+The contract is shared: a lister declares capabilities with
 `view.Saver`/`Updater`/`Deleter` — the same interfaces the renderer asserts on
 the presenter. One name per capability, used on both sides.
+
+## Migration note (v0.4.0 → v0.5.0)
+
+`Backend` is now `Lister` — the seam finally follows the verb, like
+`Saver`/`Updater`/`Deleter`. Same for its derivatives: `NewCallerBackend` →
+`NewCallerLister`, `conformance.FakeBackend` → `conformance.FakeLister`.
+Pure renames; signatures and bodies are unchanged.
 
 ## Migration note (v0.3.0 → v0.4.0)
 
@@ -106,7 +113,7 @@ func (s *deviceStore) Delete(ids ...string) error
 
 `New` lost `listOp`/`newList`; `WithSaveOp`/`WithUpdateOp`/`WithDeleteOp` and
 `WithArgs` are gone (`WithArgs` had zero call sites). A `router.Caller`
-consumer wraps it in `NewCallerBackend`:
+consumer wraps it in `NewCallerLister`:
 
 ```go
 // before
@@ -114,7 +121,7 @@ view.New(caller, &User{}, OpListUsers, func() model.ModelSlice { return &UserLis
 	view.WithTitle("Usuarios"), view.WithSaveOp(OpUpsertUser), view.WithDeleteOp(OpDeleteUser))
 
 // after
-b := view.NewCallerBackend(caller,
+l := view.NewCallerLister(caller,
 	view.Ops{List: OpListUsers, Save: OpUpsertUser, Delete: OpDeleteUser},
 	func() model.ModelSlice { return &UserList{} })
 view.New(b, &User{}, view.WithTitle("Usuarios"))
@@ -163,7 +170,7 @@ type Presenter interface {
 }
 
 // Capabilities. The renderer discovers them by type assertion at the seam.
-// They are only present when the backend implements the matching interface:
+// They are only present when the lister implements the matching interface:
 // no Save method ⇒ the returned value has no Save method ⇒ p.(Saver) fails.
 type Saver interface {
 	Save(recs ...model.Model) error
@@ -175,13 +182,13 @@ type Deleter interface {
 	Delete(ids ...string) error
 }
 
-// Backend is what a view needs from the application: the records to show.
-type Backend interface {
+// Lister is what a view needs from the application: the records to show.
+type Lister interface {
 	List() ([]model.Model, error)
 }
 
 // Optional write capabilities: the SAME interfaces a renderer asserts on the
-// Presenter. A backend declares what it can do by implementing them.
+// Presenter. A lister declares what it can do by implementing them.
 type Saver interface {
 	Save(recs ...model.Model) error
 }
@@ -192,7 +199,7 @@ type Deleter interface {
 	Delete(ids ...string) error
 }
 
-// Ops names the remote operations a CallerBackend invokes. An empty name means
+// Ops names the remote operations a CallerLister invokes. An empty name means
 // the remote side does not offer that operation.
 type Ops struct {
 	List   string
@@ -201,7 +208,7 @@ type Ops struct {
 	Delete string
 }
 
-func NewCallerBackend(c router.Caller, ops Ops, newList func() model.ModelSlice) Backend
+func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) Lister
 
 // Option is a functional configuration option for New.
 type Option func(*config)
@@ -209,11 +216,11 @@ type Option func(*config)
 func WithTitle(title string) Option
 func WithSearchPlaceholder(placeholder string) Option
 
-// New builds the presenter over a Backend. Mandatory collaborators are
+// New builds the presenter over a Lister. Mandatory collaborators are
 // positional (the compiler enforces their presence); a nil mandatory value
 // panics at construction — a loud development diagnostic, never a deferred
-// runtime mystery. The Presenter's capabilities MIRROR the backend's.
-func New(b Backend, record model.Model, opts ...Option) Presenter
+// runtime mystery. The Presenter's capabilities MIRROR the lister's.
+func New(l Lister, record model.Model, opts ...Option) Presenter
 ```
 
 ## Quick Start
@@ -240,7 +247,7 @@ func (s *catalogStore) List() ([]model.Model, error) { /* … */ }
 func (s *catalogStore) Save(recs ...model.Model) error { /* … */ }
 
 // Step 3 — build the presenter. No projection loop, no cache, no fill:
-// the presenter lists through the backend and indexes id → model itself.
+// the presenter lists through the lister and indexes id → model itself.
 func NewCatalogView(store *catalogStore) view.Presenter {
 	return view.New(store, &CatalogItem{}, view.WithTitle("Catalog Management"))
 }
@@ -268,7 +275,7 @@ func (r *Renderer) Mount() {
 	}
 	r.drawList(r.p.Items())
 	if _, ok := r.p.(view.Saver); ok {
-		r.drawSaveButton() // only exists if the backend implements Save
+		r.drawSaveButton() // only exists if the lister implements Save
 	}
 	if _, ok := r.p.(view.Deleter); ok {
 		r.drawDeleteButton()
@@ -296,7 +303,7 @@ func (r *Renderer) OnSearchTyped(term string) {
 - `Reload`, `Save`, `Update`, `Delete` are **synchronous** and return `error`. The `error` return
   IS the user-message channel: the renderer decides how to present it (toast, inline,
   console). `view` never renders, logs, or swallows messages — there is no `SetLog`.
-- `New` and `NewCallerBackend` **panic** on nil/empty mandatory collaborators. These are programmer wiring
+- `New` and `NewCallerLister` **panic** on nil/empty mandatory collaborators. These are programmer wiring
   bugs, detected deterministically at startup during development (the `template.Must`
   pattern). Logging and continuing would return a half-built presenter that crashes far
   from the cause — a deferred silent failure, which the harness forbids.
@@ -312,9 +319,9 @@ func (r *Renderer) OnSearchTyped(term string) {
    any renderer can draw the contract.
 2. **Agnostic to codec and transport** — in-process consumers import only `model`;
    the transport's codec decodes into the module's typed list (`model.ModelSlice`)
-   inside `NewCallerBackend`, the single place that knows the wire shape.
+   inside `NewCallerLister`, the single place that knows the wire shape.
 3. **Compile-time safety** — mandatory collaborators are positional in `New`;
-   capabilities are method sets, so a view whose backend cannot save simply has
+   capabilities are method sets, so a view whose lister cannot save simply has
    no `Save` method to call.
 4. **Synchronous Go idiomatic design** — `Reload`/`Save`/`Update`/`Delete` block and return
    `error`. The async network caller is wrapped inside the adapter with channels. No CPS
@@ -336,7 +343,7 @@ To ensure 100% compatibility with WebAssembly (WASM) and TinyGo targets, standar
 - **`view/mock`** — headless reference renderer for browser-less simulation and unit
   tests.
 - **`view/conformance`** — exports `conformance.Run(t, Factory)` plus the
-  `conformance.FakeBackend` typed double. A renderer is correct
+  `conformance.FakeLister` typed double. A renderer is correct
   only if it passes every clause (list load on mount, label rendering via `Itemizer`,
   select/deselect, save/delete capability assertions, filter semantics, loud errors on
   unknown ids). `conformance.Payload`/`conformance.Has` assert the wire shape a

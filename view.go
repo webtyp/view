@@ -38,7 +38,7 @@ type Presenter interface {
 
 	Items() []Item             // projected list from the last Reload
 	Filter(term string) []Item // local case-insensitive match over Label+Description; "" returns all
-	Reload() error             // asks the Backend for the records, then projects and indexes them
+	Reload() error             // asks the Lister for the records, then projects and indexes them
 
 	Selected() string             // currently selected id ("" if none)
 	Select(id string) model.Model // marks id and returns its record from the internal index; unknown id → nil, selection unchanged
@@ -49,7 +49,7 @@ type Presenter interface {
 // case is N=1, so there is exactly one write path to implement, test and reason
 // about. This is what the "+" new-record flow and the edit-one-record form use.
 //
-// Implemented by a Backend to declare the capability, and re-exposed by the
+// Implemented by a Lister to declare the capability, and re-exposed by the
 // Presenter view.New returns when the backend has it.
 type Saver interface {
 	Save(recs ...model.Model) error
@@ -69,7 +69,7 @@ type Saver interface {
 // fields holds Schema() field names and pairs directly with
 // form.DirtyFields(). An empty fields slice is an error, not a no-op.
 //
-// Implemented by a Backend to declare the capability, and re-exposed by the
+// Implemented by a Lister to declare the capability, and re-exposed by the
 // Presenter view.New returns when the backend has it.
 type Updater interface {
 	Update(ids []string, rec model.Model, fields []string) error
@@ -77,7 +77,7 @@ type Updater interface {
 
 // Deleter removes records. Variadic for the same reason as Saver.
 //
-// Implemented by a Backend to declare the capability, and re-exposed by the
+// Implemented by a Lister to declare the capability, and re-exposed by the
 // Presenter view.New returns when the backend has it.
 type Deleter interface {
 	Delete(ids ...string) error
@@ -105,20 +105,20 @@ func WithSearchPlaceholder(placeholder string) Option {
 	}
 }
 
-// New builds the presenter over a Backend. Mandatory collaborators are
+// New builds the presenter over a Lister. Mandatory collaborators are
 // positional; a nil/empty mandatory value panics — a loud development
 // diagnostic.
 //
-// The Presenter's capabilities MIRROR the backend's: it is a Saver iff b
+// The Presenter's capabilities MIRROR the lister's: it is a Saver iff l
 // implements Saver, and so on. There is no configuration that can claim
-// a capability the backend does not have.
+// a capability the lister does not have.
 func New(
-	b Backend,
+	l Lister,
 	record model.Model,
 	opts ...Option,
 ) Presenter {
-	if b == nil {
-		panic("view: New: backend is required")
+	if l == nil {
+		panic("view: New: lister is required")
 	}
 	if model.IsNil(record) {
 		panic("view: New: record is required")
@@ -130,15 +130,15 @@ func New(
 	}
 
 	c := &core{
-		backend:           b,
+		lister:            l,
 		record:            record,
 		title:             cfg.title,
 		searchPlaceholder: cfg.searchPlaceholder,
 	}
 
-	_, hasS := b.(Saver)
-	_, hasU := b.(Updater)
-	_, hasD := b.(Deleter)
+	_, hasS := l.(Saver)
+	_, hasU := l.(Updater)
+	_, hasD := l.(Deleter)
 
 	switch {
 	case hasS && hasU && hasD:

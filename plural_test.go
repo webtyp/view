@@ -82,7 +82,7 @@ func (l *dummyList) Append() model.Fielder {
 }
 
 func setupView(caller *dummyCaller) view.Presenter {
-	b := view.NewCallerBackend(caller,
+	b := view.NewCallerLister(caller,
 		view.Ops{List: "list_op", Save: "save_op", Update: "update_op", Delete: "delete_op"},
 		func() model.ModelSlice { return &dummyList{} })
 	return view.New(b, &dummyRecord{}, view.WithTitle("t"))
