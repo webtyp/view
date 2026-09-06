@@ -3,10 +3,10 @@ module webtyp.com/view
 go 1.25.2
 
 require (
-	webtyp.com/fmt v0.25.7
-	webtyp.com/input v0.0.2
-	webtyp.com/model v0.1.7
-	webtyp.com/router v0.1.30
+	webtyp.com/fmt v1.0.0
+	webtyp.com/input v0.0.6
+	webtyp.com/model v0.1.8
+	webtyp.com/router v0.1.31
 )
 
-require webtyp.com/json v0.5.23 // indirect
+require webtyp.com/json v0.5.25 // indirect
