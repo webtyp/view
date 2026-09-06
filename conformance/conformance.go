@@ -3,9 +3,9 @@ package conformance
 import (
 	"testing"
 
-	"github.com/tinywasm/input"
-	"github.com/tinywasm/model"
-	"github.com/tinywasm/view"
+	"webtyp.com/input"
+	"webtyp.com/model"
+	"webtyp.com/view"
 )
 
 // FakeLister is a typed view.Lister test double recording typed calls. It
@@ -303,7 +303,7 @@ func Run(t *testing.T, f Factory) {
 	// that claims CRUD conformance must gate persistence on "did something
 	// actually change since the record was loaded", not "was a field
 	// committed" — a blur with no edit is not a save. Every renderer answers
-	// this the same way structurally: tinywasm/form.Form.IsDirty compares
+	// this the same way structurally: webtyp/form.Form.IsDirty compares
 	// live signals against a baseline snapshotted on load; view/mock.Renderer
 	// compares its form map against a baseline snapshotted on Select/Deselect.
 	t.Run("unchanged_save_does_not_ship", func(t *testing.T) {

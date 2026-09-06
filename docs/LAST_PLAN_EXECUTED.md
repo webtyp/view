@@ -11,7 +11,7 @@ REVIEWER: none
 > **BREAKING** (`view.Backend` implementors change two signatures). Follow-up to
 > v0.3.0, see `../VIEW_PAYLOAD_SEAM_MASTER_PLAN.md` §8.
 
-# PLAN — `tinywasm/view`: three capability interfaces, not six
+# PLAN — `webtyp/view`: three capability interfaces, not six
 
 ## Why
 
@@ -46,7 +46,7 @@ used on both sides of the presenter.
 ## Repo rules
 
 - Public library → **English** in code, comments, identifiers, error messages.
-- `view` compiles to WASM: **no Go stdlib** (use `github.com/tinywasm/fmt`), **no
+- `view` compiles to WASM: **no Go stdlib** (use `webtyp.com/fmt`), **no
   `map`**, **no reflection**, **no generics**.
 - `gotest`, never `go test`. Stdlib `testing` only.
 
@@ -60,7 +60,7 @@ capability interfaces:
 ```go
 package view
 
-import "github.com/tinywasm/model"
+import "webtyp.com/model"
 
 // Backend is what a view needs from the application: the records to show.
 // Mandatory — a view with nothing to list is not a view.

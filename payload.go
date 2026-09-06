@@ -1,7 +1,7 @@
 package view
 
 import (
-	"github.com/tinywasm/model"
+	"webtyp.com/model"
 )
 
 // saveArgs carries N whole records. It is a wire shape, written and read

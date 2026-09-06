@@ -3,10 +3,10 @@ package tests
 import (
 	"testing"
 
-	"github.com/tinywasm/model"
-	"github.com/tinywasm/router"
-	"github.com/tinywasm/view"
-	"github.com/tinywasm/view/conformance"
+	"webtyp.com/model"
+	"webtyp.com/router"
+	"webtyp.com/view"
+	"webtyp.com/view/conformance"
 )
 
 type recordCall struct {

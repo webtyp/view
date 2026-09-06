@@ -3,10 +3,10 @@ package tests
 import (
 	"testing"
 
-	"github.com/tinywasm/model"
-	"github.com/tinywasm/router/mock"
-	"github.com/tinywasm/view"
-	"github.com/tinywasm/view/conformance"
+	"webtyp.com/model"
+	"webtyp.com/router/mock"
+	"webtyp.com/view"
+	"webtyp.com/view/conformance"
 )
 
 func TestModulePerspective(t *testing.T) {

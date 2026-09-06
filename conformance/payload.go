@@ -1,8 +1,8 @@
 package conformance
 
 import (
-	"github.com/tinywasm/fmt"
-	"github.com/tinywasm/model"
+	"webtyp.com/fmt"
+	"webtyp.com/model"
 )
 
 // Payload encodes args and returns every scalar it writes — at the top level,

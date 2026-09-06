@@ -1,9 +1,9 @@
 package mock
 
 import (
-	"github.com/tinywasm/fmt"
-	"github.com/tinywasm/model"
-	"github.com/tinywasm/view"
+	"webtyp.com/fmt"
+	"webtyp.com/model"
+	"webtyp.com/view"
 )
 
 // Renderer is a headless reference renderer for browser-less simulation and tests.
@@ -78,7 +78,7 @@ func (r *Renderer) Deselect() {
 
 // rebaseline snapshots the baseline to the CURRENT form values — the
 // reference implementation of the "form isn't dirty against what was just
-// loaded/saved" contract, mirroring tinywasm/form's Form.MarkPristine.
+// loaded/saved" contract, mirroring webtyp/form's Form.MarkPristine.
 func (r *Renderer) rebaseline() {
 	r.baseline = make(map[string]string, len(r.form))
 	for k, v := range r.form {
@@ -88,7 +88,7 @@ func (r *Renderer) rebaseline() {
 
 // isDirty reports whether any field differs from the baseline captured at
 // the last Select/Deselect/Save — the same "did the user actually change
-// anything" question tinywasm/form.Form.IsDirty answers for a real renderer.
+// anything" question webtyp/form.Form.IsDirty answers for a real renderer.
 func (r *Renderer) isDirty() bool {
 	if len(r.form) != len(r.baseline) {
 		return true

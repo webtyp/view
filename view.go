@@ -1,7 +1,7 @@
 package view
 
 import (
-	"github.com/tinywasm/model"
+	"webtyp.com/model"
 )
 
 // Item is ONE projected row of the list — the neutral form any renderer can draw.

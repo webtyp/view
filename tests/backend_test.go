@@ -3,9 +3,9 @@ package tests
 import (
 	"testing"
 
-	"github.com/tinywasm/model"
-	"github.com/tinywasm/view"
-	"github.com/tinywasm/view/conformance"
+	"webtyp.com/model"
+	"webtyp.com/view"
+	"webtyp.com/view/conformance"
 )
 
 // memStore is a small REAL in-memory backend: a slice of records, not an

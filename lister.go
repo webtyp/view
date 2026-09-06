@@ -1,6 +1,6 @@
 package view
 
-import "github.com/tinywasm/model"
+import "webtyp.com/model"
 
 // Lister is what a view needs from the application: the records to show.
 // Mandatory — a view with nothing to list is not a view.

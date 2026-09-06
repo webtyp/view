@@ -1,8 +1,8 @@
 package view
 
 import (
-	"github.com/tinywasm/fmt"
-	"github.com/tinywasm/model"
+	"webtyp.com/fmt"
+	"webtyp.com/model"
 )
 
 // indexEntry pairs a record with its id. A slice of these replaces what used
@@ -66,7 +66,7 @@ func (p *core) Reload() error {
 }
 
 // rowName names the row that failed an Itemizer/model.Model assertion in Reload,
-// so the error points at the offending record. tinywasm/fmt has no reflect-based
+// so the error points at the offending record. webtyp/fmt has no reflect-based
 // type-name formatter (WASM-size discipline), so this uses model.ModuleNaming —
 // the stable name ormc already generates for every domain record — when the row
 // provides it.

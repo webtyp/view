@@ -1,9 +1,9 @@
 package view
 
 import (
-	"github.com/tinywasm/fmt"
-	"github.com/tinywasm/model"
-	"github.com/tinywasm/router"
+	"webtyp.com/fmt"
+	"webtyp.com/model"
+	"webtyp.com/router"
 )
 
 // Ops names the remote operations a CallerLister invokes. An empty name means

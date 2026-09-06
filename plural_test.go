@@ -3,11 +3,11 @@ package view_test
 import (
 	"testing"
 
-	"github.com/tinywasm/input"
-	"github.com/tinywasm/model"
-	"github.com/tinywasm/router"
-	"github.com/tinywasm/view"
-	"github.com/tinywasm/view/conformance"
+	"webtyp.com/input"
+	"webtyp.com/model"
+	"webtyp.com/router"
+	"webtyp.com/view"
+	"webtyp.com/view/conformance"
 )
 
 type dummyCallerCall struct {

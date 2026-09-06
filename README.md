@@ -1,4 +1,4 @@
-# tinywasm/view
+# webtyp/view
 <img src="docs/img/badges.svg">
 
 Tech-agnostic CRUD view contract: a domain module declares its list, record and
@@ -135,8 +135,8 @@ The complete public API of `view`:
 package view
 
 import (
-	"github.com/tinywasm/model"
-	"github.com/tinywasm/router"
+	"webtyp.com/model"
+	"webtyp.com/router"
 )
 
 // Item is ONE projected row of the list — the neutral form any renderer can draw.
@@ -231,8 +231,8 @@ func New(l Lister, record model.Model, opts ...Option) Presenter
 package catalog
 
 import (
-	"github.com/tinywasm/model"
-	"github.com/tinywasm/view"
+	"webtyp.com/model"
+	"webtyp.com/view"
 )
 
 // Step 1 — the record projects itself as a list row.
@@ -264,7 +264,7 @@ from `Record().Schema()`, and discovers capabilities by assertion:
 ```go
 package crudview
 
-import "github.com/tinywasm/view"
+import "webtyp.com/view"
 
 type Renderer struct{ p view.Presenter }
 
@@ -311,7 +311,7 @@ func (r *Renderer) OnSearchTyped(term string) {
   `Delete` of an unknown id errors (nothing is sent); a row that does not
   implement `Itemizer` makes `Reload` fail naming the offending
   record (via `model.ModuleNaming.ModelName()` when the row provides it —
-  `tinywasm/fmt` has no reflect-based type-name formatter by design).
+  `webtyp/fmt` has no reflect-based type-name formatter by design).
 
 ## Design Goals
 
@@ -334,9 +334,9 @@ func (r *Renderer) OnSearchTyped(term string) {
 ## WebAssembly/TinyGo Compatibility
 
 To ensure 100% compatibility with WebAssembly (WASM) and TinyGo targets, standard library packages (such as `fmt`, `encoding/json`, or `encoding/binary`) should be avoided in production code. Use the following tech-agnostic, low-allocation alternatives instead:
-- `github.com/tinywasm/fmt` for formatting and error creation.
-- `github.com/tinywasm/json` for JSON serialization/deserialization.
-- `github.com/tinywasm/binary` for binary protocols.
+- `webtyp.com/fmt` for formatting and error creation.
+- `webtyp.com/json` for JSON serialization/deserialization.
+- `webtyp.com/binary` for binary protocols.
 
 ## Reference and Conformance
 
