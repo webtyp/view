@@ -187,12 +187,6 @@ func (m *MockList) IsNil() bool { return m == nil }
 // DecodeFields implements model.Decodable.
 func (m *MockList) DecodeFields(r model.FieldReader) {}
 
-// Schema implements model.Fielder.
-func (m *MockList) Schema() []model.Field { return nil }
-
-// Pointers implements model.Fielder.
-func (m *MockList) Pointers() []any { return nil }
-
 // Len implements model.FielderSlice.
 func (m *MockList) Len() int { return len(m.items) }
 
