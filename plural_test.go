@@ -69,12 +69,10 @@ type dummyList struct {
 	items []*dummyRecord
 }
 
-func (l *dummyList) IsNil() bool           { return l == nil }
-func (l *dummyList) Schema() []model.Field { return nil }
-func (l *dummyList) Pointers() []any       { return nil }
+func (l *dummyList) IsNil() bool                      { return l == nil }
 func (l *dummyList) DecodeFields(r model.FieldReader) {}
-func (l *dummyList) Len() int              { return len(l.items) }
-func (l *dummyList) At(i int) model.Fielder { return l.items[i] }
+func (l *dummyList) Len() int                         { return len(l.items) }
+func (l *dummyList) At(i int) model.Fielder           { return l.items[i] }
 func (l *dummyList) Append() model.Fielder {
 	it := &dummyRecord{}
 	l.items = append(l.items, it)
