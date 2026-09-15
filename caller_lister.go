@@ -66,45 +66,42 @@ type callerLister struct {
 	newList func() model.ModelSlice
 }
 
-func (b *callerLister) list() ([]model.Model, error) {
+func (b *callerLister) list(done func([]model.Model, error)) {
 	list := b.newList()
 	dec, ok := list.(model.Decodable)
 	if !ok {
-		return nil, fmt.Err("view: list returned by newList does not implement model.Decodable")
+		done(nil, fmt.Err("view: list returned by newList does not implement model.Decodable"))
+		return
 	}
-	ch := make(chan error, 1)
-	b.caller.Call(b.ops.List, nil, dec, func(err error) { ch <- err })
-	if err := <-ch; err != nil {
-		return nil, err
-	}
-	rows := make([]model.Model, 0, list.Len())
-	for i := 0; i < list.Len(); i++ {
-		row := list.At(i)
-		m, ok := row.(model.Model)
-		if !ok {
-			return nil, fmt.Err("view: Reload: row type", rowName(row), "does not implement model.Model")
+	b.caller.Call(b.ops.List, nil, dec, func(err error) {
+		if err != nil {
+			done(nil, err)
+			return
 		}
-		rows = append(rows, m)
-	}
-	return rows, nil
+		rows := make([]model.Model, 0, list.Len())
+		for i := 0; i < list.Len(); i++ {
+			row := list.At(i)
+			m, ok := row.(model.Model)
+			if !ok {
+				done(nil, fmt.Err("view: Reload: row type", rowName(row), "does not implement model.Model"))
+				return
+			}
+			rows = append(rows, m)
+		}
+		done(rows, nil)
+	})
 }
 
-func (b *callerLister) save(recs []model.Model) error {
-	ch := make(chan error, 1)
-	b.caller.Call(b.ops.Save, &saveArgs{recs: recs}, nil, func(err error) { ch <- err })
-	return <-ch
+func (b *callerLister) save(recs []model.Model, done func(error)) {
+	b.caller.Call(b.ops.Save, &saveArgs{recs: recs}, nil, done)
 }
 
-func (b *callerLister) update(ids []string, rec model.Model, fields []string) error {
-	ch := make(chan error, 1)
-	b.caller.Call(b.ops.Update, &updateArgs{ids: ids, fields: fields, rec: rec}, nil, func(err error) { ch <- err })
-	return <-ch
+func (b *callerLister) update(ids []string, rec model.Model, fields []string, done func(error)) {
+	b.caller.Call(b.ops.Update, &updateArgs{ids: ids, fields: fields, rec: rec}, nil, done)
 }
 
-func (b *callerLister) delete(ids []string) error {
-	ch := make(chan error, 1)
-	b.caller.Call(b.ops.Delete, &deleteArgs{ids: ids}, nil, func(err error) { ch <- err })
-	return <-ch
+func (b *callerLister) delete(ids []string, done func(error)) {
+	b.caller.Call(b.ops.Delete, &deleteArgs{ids: ids}, nil, done)
 }
 
 // The capability wrappers below follow the pattern documented in lister.go:
@@ -113,110 +110,110 @@ type callerList struct {
 	*callerLister
 }
 
-func (b *callerList) List() ([]model.Model, error) {
-	return b.list()
+func (b *callerList) List(done func([]model.Model, error)) {
+	b.list(done)
 }
 
 type callerSave struct {
 	*callerLister
 }
 
-func (b *callerSave) List() ([]model.Model, error) {
-	return b.list()
+func (b *callerSave) List(done func([]model.Model, error)) {
+	b.list(done)
 }
 
-func (b *callerSave) Save(recs ...model.Model) error {
-	return b.save(recs)
+func (b *callerSave) Save(recs []model.Model, done func(error)) {
+	b.save(recs, done)
 }
 
 type callerUpdate struct {
 	*callerLister
 }
 
-func (b *callerUpdate) List() ([]model.Model, error) {
-	return b.list()
+func (b *callerUpdate) List(done func([]model.Model, error)) {
+	b.list(done)
 }
 
-func (b *callerUpdate) Update(ids []string, rec model.Model, fields []string) error {
-	return b.update(ids, rec, fields)
+func (b *callerUpdate) Update(ids []string, rec model.Model, fields []string, done func(error)) {
+	b.update(ids, rec, fields, done)
 }
 
 type callerDelete struct {
 	*callerLister
 }
 
-func (b *callerDelete) List() ([]model.Model, error) {
-	return b.list()
+func (b *callerDelete) List(done func([]model.Model, error)) {
+	b.list(done)
 }
 
-func (b *callerDelete) Delete(ids ...string) error {
-	return b.delete(ids)
+func (b *callerDelete) Delete(ids []string, done func(error)) {
+	b.delete(ids, done)
 }
 
 type callerSaveUpdate struct {
 	*callerLister
 }
 
-func (b *callerSaveUpdate) List() ([]model.Model, error) {
-	return b.list()
+func (b *callerSaveUpdate) List(done func([]model.Model, error)) {
+	b.list(done)
 }
 
-func (b *callerSaveUpdate) Save(recs ...model.Model) error {
-	return b.save(recs)
+func (b *callerSaveUpdate) Save(recs []model.Model, done func(error)) {
+	b.save(recs, done)
 }
 
-func (b *callerSaveUpdate) Update(ids []string, rec model.Model, fields []string) error {
-	return b.update(ids, rec, fields)
+func (b *callerSaveUpdate) Update(ids []string, rec model.Model, fields []string, done func(error)) {
+	b.update(ids, rec, fields, done)
 }
 
 type callerSaveDelete struct {
 	*callerLister
 }
 
-func (b *callerSaveDelete) List() ([]model.Model, error) {
-	return b.list()
+func (b *callerSaveDelete) List(done func([]model.Model, error)) {
+	b.list(done)
 }
 
-func (b *callerSaveDelete) Save(recs ...model.Model) error {
-	return b.save(recs)
+func (b *callerSaveDelete) Save(recs []model.Model, done func(error)) {
+	b.save(recs, done)
 }
 
-func (b *callerSaveDelete) Delete(ids ...string) error {
-	return b.delete(ids)
+func (b *callerSaveDelete) Delete(ids []string, done func(error)) {
+	b.delete(ids, done)
 }
 
 type callerUpdateDelete struct {
 	*callerLister
 }
 
-func (b *callerUpdateDelete) List() ([]model.Model, error) {
-	return b.list()
+func (b *callerUpdateDelete) List(done func([]model.Model, error)) {
+	b.list(done)
 }
 
-func (b *callerUpdateDelete) Update(ids []string, rec model.Model, fields []string) error {
-	return b.update(ids, rec, fields)
+func (b *callerUpdateDelete) Update(ids []string, rec model.Model, fields []string, done func(error)) {
+	b.update(ids, rec, fields, done)
 }
 
-func (b *callerUpdateDelete) Delete(ids ...string) error {
-	return b.delete(ids)
+func (b *callerUpdateDelete) Delete(ids []string, done func(error)) {
+	b.delete(ids, done)
 }
 
 type callerCRUD struct {
 	*callerLister
 }
 
-func (b *callerCRUD) List() ([]model.Model, error) {
-	return b.list()
+func (b *callerCRUD) List(done func([]model.Model, error)) {
+	b.list(done)
 }
 
-func (b *callerCRUD) Save(recs ...model.Model) error {
-	return b.save(recs)
+func (b *callerCRUD) Save(recs []model.Model, done func(error)) {
+	b.save(recs, done)
 }
 
-func (b *callerCRUD) Update(ids []string, rec model.Model, fields []string) error {
-	return b.update(ids, rec, fields)
+func (b *callerCRUD) Update(ids []string, rec model.Model, fields []string, done func(error)) {
+	b.update(ids, rec, fields, done)
 }
 
-func (b *callerCRUD) Delete(ids ...string) error {
-	return b.delete(ids)
+func (b *callerCRUD) Delete(ids []string, done func(error)) {
+	b.delete(ids, done)
 }

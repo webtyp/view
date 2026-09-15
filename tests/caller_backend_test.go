@@ -46,8 +46,10 @@ func TestCallerListerTransport(t *testing.T) {
 		newMockList)
 	p := view.New(b, &conformance.MockRecord{}, view.WithTitle("t"))
 
-	if err := p.Reload(); err != nil {
-		t.Fatalf("Reload failed: %v", err)
+	var rerr error
+	p.Reload(func(e error) { rerr = e })
+	if rerr != nil {
+		t.Fatalf("Reload failed: %v", rerr)
 	}
 	if items := p.Items(); len(items) != 1 || items[0].Label != "Alice" {
 		t.Fatalf("unexpected items: %v", items)
@@ -58,8 +60,10 @@ func TestCallerListerTransport(t *testing.T) {
 	s := p.(view.Saver)
 	r1 := &conformance.MockRecord{ID: "10", Name: "Ten"}
 	r2 := &conformance.MockRecord{ID: "11", Name: "Eleven"}
-	if err := s.Save(r1, r2); err != nil {
-		t.Fatalf("Save failed: %v", err)
+	var serr error
+	s.Save([]model.Model{r1, r2}, func(e error) { serr = e })
+	if serr != nil {
+		t.Fatalf("Save failed: %v", serr)
 	}
 	if len(caller.calls) != 1 || caller.calls[0].op != "s" {
 		t.Fatalf("expected 1 call to op %q, got %v", "s", caller.calls)
@@ -72,8 +76,10 @@ func TestCallerListerTransport(t *testing.T) {
 	caller.calls = nil
 
 	u := p.(view.Updater)
-	if err := u.Update([]string{"1", "2"}, &conformance.MockRecord{Name: "Patched"}, []string{"name"}); err != nil {
-		t.Fatalf("Update failed: %v", err)
+	var uerr error
+	u.Update([]string{"1", "2"}, &conformance.MockRecord{Name: "Patched"}, []string{"name"}, func(e error) { uerr = e })
+	if uerr != nil {
+		t.Fatalf("Update failed: %v", uerr)
 	}
 	if len(caller.calls) != 1 || caller.calls[0].op != "u" {
 		t.Fatalf("expected 1 call to op %q, got %v", "u", caller.calls)
@@ -86,13 +92,16 @@ func TestCallerListerTransport(t *testing.T) {
 	caller.calls = nil
 
 	// Delete needs the ids in the index: reload first.
-	if err := p.Reload(); err != nil {
-		t.Fatalf("second Reload failed: %v", err)
+	p.Reload(func(e error) { rerr = e })
+	if rerr != nil {
+		t.Fatalf("second Reload failed: %v", rerr)
 	}
 	caller.calls = nil
 	d := p.(view.Deleter)
-	if err := d.Delete("1"); err != nil {
-		t.Fatalf("Delete failed: %v", err)
+	var derr error
+	d.Delete([]string{"1"}, func(e error) { derr = e })
+	if derr != nil {
+		t.Fatalf("Delete failed: %v", derr)
 	}
 	if len(caller.calls) != 1 || caller.calls[0].op != "d" {
 		t.Fatalf("expected 1 call to op %q, got %v", "d", caller.calls)

@@ -13,9 +13,15 @@ import "webtyp.com/model"
 // method is a compile-time fact, not a configuration string that can be
 // misspelled.
 type Lister interface {
-	// List returns every record, newest-first or in whatever order the
+	// List asks for every record, newest-first or in whatever order the
 	// application considers natural. view projects them through Itemizer.
-	List() ([]model.Model, error)
+	//
+	// The result arrives asynchronously through done, which is always non-nil:
+	// List must NOT block waiting for the records, and must never assume the
+	// caller has them when it returns. Call done exactly once with either the
+	// rows or the error — for a transport that is the callback of the
+	// underlying call, for an in-process store it may be immediate.
+	List(done func(rows []model.Model, err error))
 }
 
 // --- The capability-wrapper pattern -----------------------------------------

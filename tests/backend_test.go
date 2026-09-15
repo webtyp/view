@@ -15,15 +15,15 @@ type memStore struct {
 	rows []*conformance.MockRecord
 }
 
-func (s *memStore) List() ([]model.Model, error) {
+func (s *memStore) List(done func([]model.Model, error)) {
 	out := make([]model.Model, 0, len(s.rows))
 	for _, r := range s.rows {
 		out = append(out, r)
 	}
-	return out, nil
+	done(out, nil)
 }
 
-func (s *memStore) Save(recs ...model.Model) error {
+func (s *memStore) Save(recs []model.Model, done func(error)) {
 	for _, m := range recs {
 		rec := m.(*conformance.MockRecord)
 		replaced := false
@@ -37,10 +37,10 @@ func (s *memStore) Save(recs ...model.Model) error {
 			s.rows = append(s.rows, rec)
 		}
 	}
-	return nil
+	done(nil)
 }
 
-func (s *memStore) Update(ids []string, rec model.Model, fields []string) error {
+func (s *memStore) Update(ids []string, rec model.Model, fields []string, done func(error)) {
 	patch := rec.(*conformance.MockRecord)
 	for _, row := range s.rows {
 		inScope := false
@@ -58,10 +58,10 @@ func (s *memStore) Update(ids []string, rec model.Model, fields []string) error 
 			}
 		}
 	}
-	return nil
+	done(nil)
 }
 
-func (s *memStore) Delete(ids ...string) error {
+func (s *memStore) Delete(ids []string, done func(error)) {
 	kept := s.rows[:0]
 	for _, row := range s.rows {
 		drop := false
@@ -75,7 +75,7 @@ func (s *memStore) Delete(ids ...string) error {
 		}
 	}
 	s.rows = kept
-	return nil
+	done(nil)
 }
 
 func TestListerListSaveUpdateDelete(t *testing.T) {
@@ -85,8 +85,10 @@ func TestListerListSaveUpdateDelete(t *testing.T) {
 	p := view.New(store, &conformance.MockRecord{}, view.WithTitle("t"))
 
 	// Reload → Items projected.
-	if err := p.Reload(); err != nil {
-		t.Fatalf("Reload failed: %v", err)
+	var rerr error
+	p.Reload(func(e error) { rerr = e })
+	if rerr != nil {
+		t.Fatalf("Reload failed: %v", rerr)
 	}
 	if items := p.Items(); len(items) != 1 || items[0].ID != "1" {
 		t.Fatalf("unexpected items: %v", items)
@@ -99,13 +101,16 @@ func TestListerListSaveUpdateDelete(t *testing.T) {
 
 	// Save adds a record.
 	s := p.(view.Saver)
-	if err := s.Save(&conformance.MockRecord{ID: "2", Name: "Bob"}); err != nil {
-		t.Fatalf("Save failed: %v", err)
+	var serr error
+	s.Save([]model.Model{&conformance.MockRecord{ID: "2", Name: "Bob"}}, func(e error) { serr = e })
+	if serr != nil {
+		t.Fatalf("Save failed: %v", serr)
 	}
 
 	// Reload so the index knows the new record.
-	if err := p.Reload(); err != nil {
-		t.Fatalf("Reload after Save failed: %v", err)
+	p.Reload(func(e error) { rerr = e })
+	if rerr != nil {
+		t.Fatalf("Reload after Save failed: %v", rerr)
 	}
 	if items := p.Items(); len(items) != 2 {
 		t.Fatalf("unexpected items after Save: %v", items)
@@ -113,19 +118,24 @@ func TestListerListSaveUpdateDelete(t *testing.T) {
 
 	// Update writes only the named columns.
 	u := p.(view.Updater)
-	if err := u.Update([]string{"1"}, &conformance.MockRecord{Name: "Alicia"}, []string{"name"}); err != nil {
-		t.Fatalf("Update failed: %v", err)
+	var uerr error
+	u.Update([]string{"1"}, &conformance.MockRecord{Name: "Alicia"}, []string{"name"}, func(e error) { uerr = e })
+	if uerr != nil {
+		t.Fatalf("Update failed: %v", uerr)
 	}
 
 	// Delete removes.
 	d := p.(view.Deleter)
-	if err := d.Delete("2"); err != nil {
-		t.Fatalf("Delete failed: %v", err)
+	var derr error
+	d.Delete([]string{"2"}, func(e error) { derr = e })
+	if derr != nil {
+		t.Fatalf("Delete failed: %v", derr)
 	}
 
 	// Reload again reflects all of it.
-	if err := p.Reload(); err != nil {
-		t.Fatalf("second Reload failed: %v", err)
+	p.Reload(func(e error) { rerr = e })
+	if rerr != nil {
+		t.Fatalf("second Reload failed: %v", rerr)
 	}
 	items := p.Items()
 	if len(items) != 1 || items[0].ID != "1" || items[0].Label != "Alicia" {

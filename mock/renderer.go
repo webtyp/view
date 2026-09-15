@@ -28,9 +28,12 @@ func (r *Renderer) Presenter() view.Presenter {
 	return r.p
 }
 
-// Mount triggers loading data into the presenter synchronously.
+// Mount triggers loading data into the presenter. Load is asynchronous: a
+// lister may deliver its rows in a later turn of the event loop, so callers
+// must not assume Labels() is populated right after Mount — they must paint
+// from inside the Reload callback.
 func (r *Renderer) Mount() {
-	_ = r.p.Reload()
+	r.p.Reload(func(error) {})
 }
 
 // Labels returns labels of the loaded items.
@@ -189,7 +192,7 @@ func (r *Renderer) Save() {
 			}
 		}
 	}
-	_ = s.Save(rec)
+	s.Save([]model.Model{rec}, func(error) {})
 	r.rebaseline() // saved successfully — a later untouched commit isn't dirty again
 }
 
@@ -199,5 +202,5 @@ func (r *Renderer) Delete() {
 	if !ok {
 		return
 	}
-	_ = d.Delete(r.p.Selected())
+	d.Delete([]string{r.p.Selected()}, func(error) {})
 }

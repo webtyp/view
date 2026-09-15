@@ -15,16 +15,16 @@ a defect — report it.
 |---|---|
 | Create a list/detail view for my model | `view.New(lister, &X{}, opts...)` where `lister` implements `view.Lister` |
 | Make my rows appear in the list | Implement `Item() view.Item` on the record type (`view.Itemizer`) |
-| Enable saving | Implement `Save(recs ...model.Model) error` — the returned Presenter then satisfies `view.Saver` |
-| Enable field patches | Implement `Update(ids []string, rec model.Model, fields []string) error` — the Presenter then satisfies `view.Updater` |
-| Enable deleting | Implement `Delete(ids ...string) error` — the returned Presenter then satisfies `view.Deleter` |
+| Enable saving | Implement `Save(recs []model.Model, done func(error))` — the returned Presenter then satisfies `view.Saver` |
+| Enable field patches | Implement `Update(ids []string, rec model.Model, fields []string, done func(error))` — the Presenter then satisfies `view.Updater` |
+| Enable deleting | Implement `Delete(ids []string, done func(error))` — the returned Presenter then satisfies `view.Deleter` |
 | Know if the view can save/delete (renderer side) | `s, ok := p.(view.Saver)` / `d, ok := p.(view.Deleter)` |
-| Load / refresh the list | `p.Reload()` (synchronous, returns `error`) |
+| Load / refresh the list | `p.Reload(func(err error){ … })` — results arrive asynchronously |
 | Pick a record and get its full model | `m := p.Select(id)` (`nil` if the id is unknown) |
 | Clear the selection | `p.Deselect()` |
 | Filter the list as the user types | `p.Filter(term)` (local, case-insensitive over Label+Description) |
 | Connect over a transport (mcp, http) | `view.NewCallerLister(caller, view.Ops{…}, newList)` then `view.New(l, &X{}, …)` |
-| Show an error/success message | Renderer's job: branch on the `error` returned by `Reload`/`Save`/`Delete` |
+| Show an error/success message | Renderer's job: branch on the `error` passed to the `done` callback of `Reload`/`Save`/`Delete` |
 | Test a renderer implementation | `conformance.Run(t, factory)` — it must pass every clause |
 | Simulate a view without a browser | `view/mock.Renderer` |
 
@@ -38,30 +38,34 @@ on your store. There is no operation name to spell, no envelope to unpack:
 ```go
 type deviceStore struct{ db *orm.DB }
 
-func (s *deviceStore) List() ([]model.Model, error) {
+// Every operation is asynchronous: the result is handed to done, which is
+// always non-nil. An in-process store may call it immediately; a transport
+// calls it from its own callback. Never block, never return the result.
+func (s *deviceStore) List(done func([]model.Model, error)) {
 	var rows []model.Model
 	err := s.db.Query(&Device{}).ReadAll(
 		func() model.Model { return &Device{} },
 		func(m model.Model) { rows = append(rows, m) },
 	)
-	return rows, err
+	done(rows, err)
 }
 
-func (s *deviceStore) Save(recs ...model.Model) error {
+func (s *deviceStore) Save(recs []model.Model, done func(error)) {
 	for _, m := range recs {
 		if err := s.upsert(m.(*Device)); err != nil {
-			return err
+			done(err)
+			return
 		}
 	}
-	return nil
+	done(nil)
 }
 
-func (s *deviceStore) Update(ids []string, rec model.Model, fields []string) error {
-	return s.db.UpdateFields(rec, fields, storage.In("id", anyIDs(ids)))
+func (s *deviceStore) Update(ids []string, rec model.Model, fields []string, done func(error)) {
+	done(s.db.UpdateFields(rec, fields, storage.In("id", anyIDs(ids))))
 }
 
-func (s *deviceStore) Delete(ids ...string) error {
-	return s.db.Delete(&Device{}, storage.In("id", anyIDs(ids)))
+func (s *deviceStore) Delete(ids []string, done func(error)) {
+	done(s.db.Delete(&Device{}, storage.In("id", anyIDs(ids))))
 }
 
 view.New(&deviceStore{db: deviceDB}, &Device{}, view.WithTitle("Computadores"))
@@ -84,6 +88,32 @@ lister does not implement `Save`, the presenter simply is not a `view.Saver`.
 The contract is shared: a lister declares capabilities with
 `view.Saver`/`Updater`/`Deleter` — the same interfaces the renderer asserts on
 the presenter. One name per capability, used on both sides.
+
+## Migration note (v0.5.0 → v0.6.0)
+
+`Lister.List`, `Saver.Save`, `Updater.Update`, `Deleter.Delete` and
+`Presenter.Reload` no longer return an `error` — they take a `done` callback,
+delivered **last**, and every outcome (including validation errors like
+"Save requires at least one record") travels through it. The variadic
+`Save(recs ...model.Model)` / `Delete(ids ...string)` are gone: pass a slice
+(the one-record case is a slice of one).
+
+```go
+// v0.5.0 — synchronous, variadic
+rows, err := lister.List()
+if err != nil { … }
+err = saver.Save(rec1, rec2)
+
+// v0.6.0 — asynchronous, slice + done
+lister.List(func(rows []model.Model, err error) { … })
+saver.Save([]model.Model{rec1, rec2}, func(err error) { … })
+```
+
+The change exists because the old shape blocked a channel over an inherently
+asynchronous transport — a program that **deadlocks on Go WASM** (all goroutines
+asleep) and only works on TinyGo. Every screen built on `view` now requests
+work and paints the result from inside the callback, exactly like a React
+`useEffect` or an Elm `Cmd`.
 
 ## Migration note (v0.4.0 → v0.5.0)
 
@@ -162,7 +192,11 @@ type Presenter interface {
 
 	Items() []Item             // projected list from the last Reload
 	Filter(term string) []Item // local case-insensitive match over Label+Description; "" returns all
-	Reload() error             // synchronously lists, projects and indexes
+
+	// Reload asks the Lister for the records, then projects and indexes them.
+	// The result is asynchronous: done runs once, after List delivers, and the
+	// renderer paints Items() from inside it.
+	Reload(done func(error))
 
 	Selected() string             // currently selected id ("" if none)
 	Select(id string) model.Model // marks id and returns its record from the internal index; unknown id → nil, selection unchanged
@@ -172,31 +206,23 @@ type Presenter interface {
 // Capabilities. The renderer discovers them by type assertion at the seam.
 // They are only present when the lister implements the matching interface:
 // no Save method ⇒ the returned value has no Save method ⇒ p.(Saver) fails.
+// All three deliver their outcome asynchronously through done (never nil,
+// never blocking) — the same single channel every failure travels.
 type Saver interface {
-	Save(recs ...model.Model) error
+	Save(recs []model.Model, done func(error))
 }
 type Updater interface {
-	Update(ids []string, rec model.Model, fields []string) error
+	Update(ids []string, rec model.Model, fields []string, done func(error))
 }
 type Deleter interface {
-	Delete(ids ...string) error
+	Delete(ids []string, done func(error))
 }
 
 // Lister is what a view needs from the application: the records to show.
 type Lister interface {
-	List() ([]model.Model, error)
-}
-
-// Optional write capabilities: the SAME interfaces a renderer asserts on the
-// Presenter. A lister declares what it can do by implementing them.
-type Saver interface {
-	Save(recs ...model.Model) error
-}
-type Updater interface {
-	Update(ids []string, rec model.Model, fields []string) error
-}
-type Deleter interface {
-	Delete(ids ...string) error
+	// List asks for every record. The result arrives asynchronously through
+	// done, which is always non-nil; List must NOT block waiting for it.
+	List(done func(rows []model.Model, err error))
 }
 
 // Ops names the remote operations a CallerLister invokes. An empty name means
@@ -243,8 +269,8 @@ func (c *CatalogItem) Item() view.Item {
 // Step 2 — the store implements the domain seam (List + the writes it supports).
 type catalogStore struct{ /* … */ }
 
-func (s *catalogStore) List() ([]model.Model, error) { /* … */ }
-func (s *catalogStore) Save(recs ...model.Model) error { /* … */ }
+func (s *catalogStore) List(done func([]model.Model, error)) { /* … done(rows, err) */ }
+func (s *catalogStore) Save(recs []model.Model, done func(error)) { /* … done(err) */ }
 
 // Step 3 — build the presenter. No projection loop, no cache, no fill:
 // the presenter lists through the lister and indexes id → model itself.
@@ -268,12 +294,16 @@ import "webtyp.com/view"
 
 type Renderer struct{ p view.Presenter }
 
+// Mount: request the list and paint from INSIDE the callback — the result is
+// not available when Reload returns.
 func (r *Renderer) Mount() {
-	if err := r.p.Reload(); err != nil {
-		r.ShowError(err) // messages are the renderer's concern
-		return
-	}
-	r.drawList(r.p.Items())
+	r.p.Reload(func(err error) {
+		if err != nil {
+			r.ShowError(err) // messages are the renderer's concern
+			return
+		}
+		r.drawList(r.p.Items())
+	})
 	if _, ok := r.p.(view.Saver); ok {
 		r.drawSaveButton() // only exists if the lister implements Save
 	}
@@ -286,11 +316,13 @@ func (r *Renderer) OnSaveClicked() {
 	s := r.p.(view.Saver) // safe: the button only exists if the assertion held
 	rec := r.p.Record()
 	r.syncFormToRecord(rec) // explicit, unidirectional: form → record → Save
-	if err := s.Save(rec); err != nil {
-		r.ShowError(err)
-		return
-	}
-	r.ShowSuccess()
+	s.Save([]model.Model{rec}, func(err error) {
+		if err != nil {
+			r.ShowError(err)
+			return
+		}
+		r.ShowSuccess()
+	})
 }
 
 func (r *Renderer) OnSearchTyped(term string) {
@@ -300,9 +332,12 @@ func (r *Renderer) OnSearchTyped(term string) {
 
 ## Error model
 
-- `Reload`, `Save`, `Update`, `Delete` are **synchronous** and return `error`. The `error` return
-  IS the user-message channel: the renderer decides how to present it (toast, inline,
-  console). `view` never renders, logs, or swallows messages — there is no `SetLog`.
+- `Reload`, `Save`, `Update`, `Delete` are **asynchronous**: each takes a `done func(error)`
+  (always non-nil) and returns nothing. That callback IS the single user-message
+  channel — validation errors and transport errors alike arrive through it, and the
+  renderer decides how to present them (toast, inline, console). `view` never renders,
+  logs, or swallows messages — there is no `SetLog`, and there is no second way to
+  report a result.
 - `New` and `NewCallerLister` **panic** on nil/empty mandatory collaborators. These are programmer wiring
   bugs, detected deterministically at startup during development (the `template.Must`
   pattern). Logging and continuing would return a half-built presenter that crashes far
@@ -323,11 +358,12 @@ func (r *Renderer) OnSearchTyped(term string) {
 3. **Compile-time safety** — mandatory collaborators are positional in `New`;
    capabilities are method sets, so a view whose lister cannot save simply has
    no `Save` method to call.
-4. **Synchronous Go idiomatic design** — `Reload`/`Save`/`Update`/`Delete` block and return
-   `error`. The async network caller is wrapped inside the adapter with channels. No CPS
-   callbacks, no dangling UI states.
-5. **Explicit form synchronization** — `Save(recs...)` takes the synchronized records
-   explicitly: unidirectional data flow, no hidden shared-pointer mutations.
+4. **Callback-based, runtime-agnostic** — `Reload`/`Save`/`Update`/`Delete` take a `done`
+   callback; `view` never blocks and never uses a channel. The async network caller is
+   adopted as-is by `NewCallerLister`, so the same library works on Go WASM and TinyGo
+   alike. The renderer paints from inside the callback.
+5. **Explicit form synchronization** — `Save([]model.Model{…}, done)` takes the synchronized
+   records explicitly: unidirectional data flow, no hidden shared-pointer mutations.
 6. **Glue lives here, once** — projection loop, id→model index, capability wiring
    and the transport adapter are implemented in this package, not repeated in every module.
 
@@ -348,3 +384,12 @@ To ensure 100% compatibility with WebAssembly (WASM) and TinyGo targets, standar
   select/deselect, save/delete capability assertions, filter semantics, loud errors on
   unknown ids). `conformance.Payload`/`conformance.Has` assert the wire shape a
   `router.Caller` double saw — the tool for testing the transport path.
+
+## Documentation
+
+- **`AGENTS.md`** — contributor rules: the async callback contract (never
+  block, never channels), WASM/TinyGo restrictions, the capability-wrapper
+  pattern, and testing with `gotest`. Read before touching any code.
+- **`docs/SPECS.md`** — the exact contract: public surface, callback
+  semantics, capability mirroring, every error message word for word, the wire
+  shapes, and the conformance clause list. Every table is a test assertion.

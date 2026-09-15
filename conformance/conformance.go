@@ -1,6 +1,7 @@
 package conformance
 
 import (
+	"sync"
 	"testing"
 
 	"webtyp.com/input"
@@ -24,40 +25,44 @@ type FakeLister struct {
 	Err           error // returned by every operation, for error-path clauses
 }
 
-func (b *FakeLister) List() ([]model.Model, error) {
+func (b *FakeLister) List(done func([]model.Model, error)) {
 	b.Calls++
 	if b.Err != nil {
-		return nil, b.Err
+		done(nil, b.Err)
+		return
 	}
 	out := make([]model.Model, len(b.Rows))
 	copy(out, b.Rows)
-	return out, nil
+	done(out, nil)
 }
 
-func (b *FakeLister) Save(recs ...model.Model) error {
+func (b *FakeLister) Save(recs []model.Model, done func(error)) {
 	if b.Err != nil {
-		return b.Err
+		done(b.Err)
+		return
 	}
 	b.SavedRecords = append(b.SavedRecords, recs...)
-	return nil
+	done(nil)
 }
 
-func (b *FakeLister) Update(ids []string, rec model.Model, fields []string) error {
+func (b *FakeLister) Update(ids []string, rec model.Model, fields []string, done func(error)) {
 	if b.Err != nil {
-		return b.Err
+		done(b.Err)
+		return
 	}
 	b.UpdatedIDs = append(b.UpdatedIDs, ids...)
 	b.UpdatedFields = append(b.UpdatedFields, fields...)
 	b.UpdatedRecord = rec
-	return nil
+	done(nil)
 }
 
-func (b *FakeLister) Delete(ids ...string) error {
+func (b *FakeLister) Delete(ids []string, done func(error)) {
 	if b.Err != nil {
-		return b.Err
+		done(b.Err)
+		return
 	}
 	b.DeletedIDs = append(b.DeletedIDs, ids...)
-	return nil
+	done(nil)
 }
 
 var (
@@ -73,10 +78,10 @@ type listOnlyLister struct {
 	rows []model.Model
 }
 
-func (b *listOnlyLister) List() ([]model.Model, error) {
+func (b *listOnlyLister) List(done func([]model.Model, error)) {
 	out := make([]model.Model, len(b.rows))
 	copy(out, b.rows)
-	return out, nil
+	done(out, nil)
 }
 
 // listSaveLister implements List+Save only: the double proving the mirror
@@ -87,15 +92,29 @@ type listSaveLister struct {
 	saved []model.Model
 }
 
-func (b *listSaveLister) List() ([]model.Model, error) {
+func (b *listSaveLister) List(done func([]model.Model, error)) {
 	out := make([]model.Model, len(b.rows))
 	copy(out, b.rows)
-	return out, nil
+	done(out, nil)
 }
 
-func (b *listSaveLister) Save(recs ...model.Model) error {
+func (b *listSaveLister) Save(recs []model.Model, done func(error)) {
 	b.saved = append(b.saved, recs...)
-	return nil
+	done(nil)
+}
+
+// deferredLister is the double for the no_blocking_in_list clause: it captures
+// the done callback and returns WITHOUT invoking it — the shape of a real
+// transport, whose result arrives in a later turn of the event loop. The test
+// releases done manually and asserts the projection only then, so any renderer
+// that assumes the rows exist when List returns fails here.
+type deferredLister struct {
+	rows []model.Model
+	done func([]model.Model, error)
+}
+
+func (b *deferredLister) List(done func([]model.Model, error)) {
+	b.done = done
 }
 
 // Factory builds the renderer under test around the presenter and returns a Driver.
@@ -459,7 +478,8 @@ func Run(t *testing.T, f Factory) {
 			t.Fatalf("expected presenter to implement view.Deleter")
 		}
 
-		err := d.Delete("unknown")
+		var err error
+		d.Delete([]string{"unknown"}, func(e error) { err = e })
 		if err == nil {
 			t.Errorf("expected error deleting unknown id, got nil")
 		}
@@ -576,8 +596,10 @@ func Run(t *testing.T, f Factory) {
 		record := &MockRecord{}
 		p := view.New(fb, record)
 
-		if err := p.Reload(); err != nil {
-			t.Fatalf("reload failed: %v", err)
+		var rerr error
+		p.Reload(func(e error) { rerr = e })
+		if rerr != nil {
+			t.Fatalf("reload failed: %v", rerr)
 		}
 
 		s := p.(view.Saver)
@@ -587,16 +609,20 @@ func Run(t *testing.T, f Factory) {
 		// Plural Save
 		r1 := &MockRecord{ID: "10", Name: "Ten"}
 		r2 := &MockRecord{ID: "11", Name: "Eleven"}
-		if err := s.Save(r1, r2); err != nil {
-			t.Fatalf("plural Save failed: %v", err)
+		var serr error
+		s.Save([]model.Model{r1, r2}, func(e error) { serr = e })
+		if serr != nil {
+			t.Fatalf("plural Save failed: %v", serr)
 		}
 		if len(fb.SavedRecords) != 2 {
 			t.Errorf("expected 2 saved records in 1 call, got %d", len(fb.SavedRecords))
 		}
 
 		// Plural Delete
-		if err := d.Delete("1", "2"); err != nil {
-			t.Fatalf("plural Delete failed: %v", err)
+		var derr error
+		d.Delete([]string{"1", "2"}, func(e error) { derr = e })
+		if derr != nil {
+			t.Fatalf("plural Delete failed: %v", derr)
 		}
 		if len(fb.DeletedIDs) != 2 {
 			t.Errorf("expected 2 deleted ids in 1 call, got %d", len(fb.DeletedIDs))
@@ -604,11 +630,49 @@ func Run(t *testing.T, f Factory) {
 
 		// Plural Update
 		patch := &MockRecord{Name: "Patched"}
-		if err := u.Update([]string{"1", "2"}, patch, []string{"name"}); err != nil {
-			t.Fatalf("plural Update failed: %v", err)
+		var uerr error
+		u.Update([]string{"1", "2"}, patch, []string{"name"}, func(e error) { uerr = e })
+		if uerr != nil {
+			t.Fatalf("plural Update failed: %v", uerr)
 		}
 		if len(fb.UpdatedIDs) != 2 || len(fb.UpdatedFields) != 1 || fb.UpdatedFields[0] != "name" {
 			t.Errorf("expected 2 ids and 1 field in update call, got ids=%v fields=%v", fb.UpdatedIDs, fb.UpdatedFields)
+		}
+	})
+
+	// The invariant this suite exists to guard: a Lister's result may arrive
+	// AFTER List returns (the shape of every real transport). A renderer that
+	// assumes the projection is already available when List returns would paint
+	// an empty list here — and this clause would catch it.
+	t.Run("no_blocking_in_list", func(t *testing.T) {
+		dl := &deferredLister{
+			rows: []model.Model{
+				&MockRecord{ID: "1", Name: "Alice"},
+				&MockRecord{ID: "2", Name: "Bob"},
+			},
+		}
+		record := &MockRecord{}
+		p := view.New(dl, record)
+
+		driver := f.New(t, p)
+		driver.Mount() // List captured done and returned — nothing projected yet
+
+		if labels := driver.Labels(); len(labels) != 0 {
+			t.Errorf("expected no items before done runs (List returned without a result), got %v", labels)
+		}
+
+		// Deliver the result in a later turn of the event loop.
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			dl.done(dl.rows, nil)
+		}()
+		wg.Wait()
+
+		labels := driver.Labels()
+		if len(labels) != 2 || labels[0] != "Alice" || labels[1] != "Bob" {
+			t.Errorf("expected labels %v after deferred done, got %v", []string{"Alice", "Bob"}, labels)
 		}
 	})
 }

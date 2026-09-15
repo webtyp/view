@@ -23,8 +23,10 @@ func TestModulePerspective(t *testing.T) {
 	p := view.New(b, record, view.WithTitle("t"))
 
 	// 1. Reload -> List
-	if err := p.Reload(); err != nil {
-		t.Fatalf("reload failed: %v", err)
+	var rerr error
+	p.Reload(func(e error) { rerr = e })
+	if rerr != nil {
+		t.Fatalf("reload failed: %v", rerr)
 	}
 
 	items := p.Items()
@@ -55,8 +57,10 @@ func TestModulePerspective(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected presenter to implement view.Saver")
 	}
-	if err := s.Save(record); err != nil {
-		t.Fatalf("save failed: %v", err)
+	var serr error
+	s.Save([]model.Model{record}, func(e error) { serr = e })
+	if serr != nil {
+		t.Fatalf("save failed: %v", serr)
 	}
 
 	var foundSaveCall bool
@@ -74,8 +78,10 @@ func TestModulePerspective(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected presenter to implement view.Deleter")
 	}
-	if err := d.Delete("m1"); err != nil {
-		t.Fatalf("delete failed: %v", err)
+	var derr error
+	d.Delete([]string{"m1"}, func(e error) { derr = e })
+	if derr != nil {
+		t.Fatalf("delete failed: %v", derr)
 	}
 
 	var foundDeleteCall bool

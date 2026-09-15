@@ -1,4 +1,4 @@
-package view_test
+package tests
 
 import (
 	"testing"
@@ -91,7 +91,8 @@ func TestSaveRejectsAnEmptyBatch(t *testing.T) {
 	p := setupView(caller)
 	s := p.(view.Saver)
 
-	err := s.Save()
+	var err error
+	s.Save(nil, func(e error) { err = e })
 	if err == nil || err.Error() != "view: Save requires at least one record" {
 		t.Errorf("expected empty batch error, got %v", err)
 	}
@@ -106,7 +107,9 @@ func TestSaveShipsEveryRecordInOneCall(t *testing.T) {
 	r2 := &dummyRecord{id: "b", name: "B"}
 	r3 := &dummyRecord{id: "c", name: "C"}
 
-	if err := s.Save(r1, r2, r3); err != nil {
+	var err error
+	s.Save([]model.Model{r1, r2, r3}, func(e error) { err = e })
+	if err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
 
@@ -128,7 +131,8 @@ func TestUpdateRejectsAnEmptyIDList(t *testing.T) {
 	u := p.(view.Updater)
 
 	rec := &dummyRecord{name: "Patched"}
-	err := u.Update(nil, rec, []string{"name"})
+	var err error
+	u.Update(nil, rec, []string{"name"}, func(e error) { err = e })
 	if err == nil || err.Error() != "view: Update requires at least one id" {
 		t.Errorf("expected empty id list error, got %v", err)
 	}
@@ -140,7 +144,8 @@ func TestUpdateRejectsAnEmptyFieldList(t *testing.T) {
 	u := p.(view.Updater)
 
 	rec := &dummyRecord{name: "Patched"}
-	err := u.Update([]string{"1"}, rec, nil)
+	var err error
+	u.Update([]string{"1"}, rec, nil, func(e error) { err = e })
 	if err == nil || err.Error() != "view: Update requires at least one field" {
 		t.Errorf("expected empty field list error, got %v", err)
 	}
@@ -152,7 +157,9 @@ func TestUpdateShipsIDsFieldsAndRecord(t *testing.T) {
 	u := p.(view.Updater)
 
 	rec := &dummyRecord{name: "Patched"}
-	if err := u.Update([]string{"1", "2"}, rec, []string{"name"}); err != nil {
+	var err error
+	u.Update([]string{"1", "2"}, rec, []string{"name"}, func(e error) { err = e })
+	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
@@ -173,7 +180,8 @@ func TestDeleteRejectsAnEmptyIDList(t *testing.T) {
 	p := setupView(caller)
 	d := p.(view.Deleter)
 
-	err := d.Delete()
+	var err error
+	d.Delete(nil, func(e error) { err = e })
 	if err == nil || err.Error() != "view: Delete requires at least one id" {
 		t.Errorf("expected empty id list error, got %v", err)
 	}
@@ -182,15 +190,18 @@ func TestDeleteRejectsAnEmptyIDList(t *testing.T) {
 func TestDeleteValidatesEveryIDBeforeShipping(t *testing.T) {
 	caller := &dummyCaller{}
 	p := setupView(caller)
-	if err := p.Reload(); err != nil {
-		t.Fatalf("Reload failed: %v", err)
+	var rerr error
+	p.Reload(func(e error) { rerr = e })
+	if rerr != nil {
+		t.Fatalf("Reload failed: %v", rerr)
 	}
 
 	// Reset calls after Reload so we only count Delete calls.
 	caller.calls = nil
 
 	d := p.(view.Deleter)
-	err := d.Delete("1", "unknown", "2")
+	var err error
+	d.Delete([]string{"1", "unknown", "2"}, func(e error) { err = e })
 	if err == nil || err.Error() != `view: Delete: unknown id "unknown"` {
 		t.Errorf("expected unknown id error, got %v", err)
 	}
@@ -203,15 +214,19 @@ func TestDeleteValidatesEveryIDBeforeShipping(t *testing.T) {
 func TestDeleteShipsEveryIDInOneCall(t *testing.T) {
 	caller := &dummyCaller{}
 	p := setupView(caller)
-	if err := p.Reload(); err != nil {
-		t.Fatalf("Reload failed: %v", err)
+	var rerr error
+	p.Reload(func(e error) { rerr = e })
+	if rerr != nil {
+		t.Fatalf("Reload failed: %v", rerr)
 	}
 
 	// Reset calls after Reload so we only count Delete calls.
 	caller.calls = nil
 
 	d := p.(view.Deleter)
-	if err := d.Delete("1", "2", "3"); err != nil {
+	var err error
+	d.Delete([]string{"1", "2", "3"}, func(e error) { err = e })
+	if err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
@@ -224,5 +239,77 @@ func TestDeleteShipsEveryIDInOneCall(t *testing.T) {
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "ids", "1") || !conformance.Has(pairs, "ids", "2") || !conformance.Has(pairs, "ids", "3") {
 		t.Errorf("expected all three ids in the wire payload, got %v", pairs)
+	}
+}
+
+// deferredLister captures done and returns without invoking it: the shape of a
+// real transport, whose result arrives in a later turn of the event loop.
+type deferredLister struct {
+	rows []model.Model
+	done func([]model.Model, error)
+}
+
+func (l *deferredLister) List(done func([]model.Model, error)) { l.done = done }
+
+// TestListDoneRunsLater is the package-level twin of the conformance clause
+// no_blocking_in_list: Reload must project only when List's done finally runs,
+// and Items() must be empty before that.
+func TestListDoneRunsLater(t *testing.T) {
+	dl := &deferredLister{
+		rows: []model.Model{&dummyRecord{id: "1", name: "One"}},
+	}
+	p := view.New(dl, &dummyRecord{})
+
+	p.Reload(func(error) {})
+	if items := p.Items(); len(items) != 0 {
+		t.Fatalf("expected no items before done runs, got %v", items)
+	}
+
+	released := make(chan struct{})
+	go func() {
+		dl.done(dl.rows, nil)
+		close(released)
+	}()
+	<-released
+
+	items := p.Items()
+	if len(items) != 1 || items[0].ID != "1" || items[0].Label != "One" {
+		t.Fatalf("expected item 1/One after deferred done, got %v", items)
+	}
+}
+
+// TestValidationErrorsTravelThroughDone pins the one-channel-of-error rule:
+// every programming error save/update/delete can produce is delivered through
+// done — the methods return nothing, so there is exactly one way to report a
+// failure. Messages are compared word for word: tests depend on them.
+func TestValidationErrorsTravelThroughDone(t *testing.T) {
+	caller := &dummyCaller{}
+	p := setupView(caller)
+	s := p.(view.Saver)
+	u := p.(view.Updater)
+	d := p.(view.Deleter)
+
+	cases := []struct {
+		name string
+		run  func(done func(error))
+		want string
+	}{
+		{"save_empty_batch", func(done func(error)) { s.Save(nil, done) }, "view: Save requires at least one record"},
+		{"save_nil_record", func(done func(error)) { s.Save([]model.Model{nil}, done) }, "view: Save payload is nil"},
+		{"update_no_ids", func(done func(error)) { u.Update(nil, &dummyRecord{}, []string{"name"}, done) }, "view: Update requires at least one id"},
+		{"update_no_fields", func(done func(error)) { u.Update([]string{"1"}, &dummyRecord{}, nil, done) }, "view: Update requires at least one field"},
+		{"update_nil_record", func(done func(error)) { u.Update([]string{"1"}, nil, []string{"name"}, done) }, "view: Update record is nil"},
+		{"delete_no_ids", func(done func(error)) { d.Delete(nil, done) }, "view: Delete requires at least one id"},
+		{"delete_unknown_id", func(done func(error)) { d.Delete([]string{"unknown"}, done) }, `view: Delete: unknown id "unknown"`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got error
+			tc.run(func(err error) { got = err })
+			if got == nil || got.Error() != tc.want {
+				t.Errorf("expected error %q via done, got %v", tc.want, got)
+			}
+		})
 	}
 }

@@ -44,25 +44,31 @@ func (p *core) Selected() string {
 	return p.selected
 }
 
-func (p *core) Reload() error {
-	rows, err := p.lister.List()
-	if err != nil {
-		return err
+func (p *core) Reload(done func(error)) {
+	if done == nil {
+		done = func(error) {}
 	}
-
-	p.items = p.items[:0]
-	p.index = make([]indexEntry, 0, len(rows))
-	for _, row := range rows {
-		iz, ok := row.(Itemizer)
-		if !ok {
-			return fmt.Err("view: Reload: row type", rowName(row), "does not implement view.Itemizer")
+	p.lister.List(func(rows []model.Model, err error) {
+		if err != nil {
+			done(err)
+			return
 		}
-		it := iz.Item()
-		p.items = append(p.items, it)
-		p.index = append(p.index, indexEntry{id: it.ID, rec: row})
-	}
 
-	return nil
+		p.items = p.items[:0]
+		p.index = make([]indexEntry, 0, len(rows))
+		for _, row := range rows {
+			iz, ok := row.(Itemizer)
+			if !ok {
+				done(fmt.Err("view: Reload: row type", rowName(row), "does not implement view.Itemizer"))
+				return
+			}
+			it := iz.Item()
+			p.items = append(p.items, it)
+			p.index = append(p.index, indexEntry{id: it.ID, rec: row})
+		}
+
+		done(nil)
+	})
 }
 
 // rowName names the row that failed an Itemizer/model.Model assertion in Reload,
@@ -118,56 +124,75 @@ func (p *core) Filter(term string) []Item {
 	return filtered
 }
 
-func (c *core) save(recs ...model.Model) error {
+func (c *core) save(recs []model.Model, done func(error)) {
+	if done == nil {
+		done = func(error) {}
+	}
 	if len(recs) == 0 {
-		return fmt.Err("view: Save requires at least one record")
+		done(fmt.Err("view: Save requires at least one record"))
+		return
 	}
 	for _, rec := range recs {
 		if model.IsNil(rec) {
-			return fmt.Err("view: Save payload is nil")
+			done(fmt.Err("view: Save payload is nil"))
+			return
 		}
 	}
 
 	b, ok := c.lister.(Saver)
 	if !ok {
-		return fmt.Err("view: Save: lister does not implement view.Saver")
+		done(fmt.Err("view: Save: lister does not implement view.Saver"))
+		return
 	}
-	return b.Save(recs...)
+	b.Save(recs, done)
 }
 
-func (c *core) update(ids []string, rec model.Model, fields []string) error {
+func (c *core) update(ids []string, rec model.Model, fields []string, done func(error)) {
+	if done == nil {
+		done = func(error) {}
+	}
 	if len(ids) == 0 {
-		return fmt.Err("view: Update requires at least one id")
+		done(fmt.Err("view: Update requires at least one id"))
+		return
 	}
 	if len(fields) == 0 {
-		return fmt.Err("view: Update requires at least one field")
+		done(fmt.Err("view: Update requires at least one field"))
+		return
 	}
 	if model.IsNil(rec) {
-		return fmt.Err("view: Update record is nil")
+		done(fmt.Err("view: Update record is nil"))
+		return
 	}
 
 	b, ok := c.lister.(Updater)
 	if !ok {
-		return fmt.Err("view: Update: lister does not implement view.Updater")
+		done(fmt.Err("view: Update: lister does not implement view.Updater"))
+		return
 	}
-	return b.Update(ids, rec, fields)
+	b.Update(ids, rec, fields, done)
 }
 
-func (c *core) delete(ids ...string) error {
+func (c *core) delete(ids []string, done func(error)) {
+	if done == nil {
+		done = func(error) {}
+	}
 	if len(ids) == 0 {
-		return fmt.Err("view: Delete requires at least one id")
+		done(fmt.Err("view: Delete requires at least one id"))
+		return
 	}
 	for _, id := range ids {
 		if _, ok := c.lookup(id); !ok {
-			return fmt.Errf("view: Delete: unknown id %q", id)
+			done(fmt.Errf("view: Delete: unknown id %q", id))
+			return
 		}
 	}
 
 	b, ok := c.lister.(Deleter)
 	if !ok {
-		return fmt.Err("view: Delete: lister does not implement view.Deleter")
+		done(fmt.Err("view: Delete: lister does not implement view.Deleter"))
+		return
 	}
-	return b.Delete(ids...)
+	b.Delete(ids, done)
 }
 
 // The capability wrappers below follow the pattern documented in lister.go:
@@ -176,74 +201,74 @@ type saveable struct {
 	*core
 }
 
-func (s *saveable) Save(recs ...model.Model) error {
-	return s.save(recs...)
+func (s *saveable) Save(recs []model.Model, done func(error)) {
+	s.save(recs, done)
 }
 
 type updatable struct {
 	*core
 }
 
-func (u *updatable) Update(ids []string, rec model.Model, fields []string) error {
-	return u.update(ids, rec, fields)
+func (u *updatable) Update(ids []string, rec model.Model, fields []string, done func(error)) {
+	u.update(ids, rec, fields, done)
 }
 
 type deletable struct {
 	*core
 }
 
-func (d *deletable) Delete(ids ...string) error {
-	return d.delete(ids...)
+func (d *deletable) Delete(ids []string, done func(error)) {
+	d.delete(ids, done)
 }
 
 type saveableUpdatable struct {
 	*core
 }
 
-func (su *saveableUpdatable) Save(recs ...model.Model) error {
-	return su.save(recs...)
+func (su *saveableUpdatable) Save(recs []model.Model, done func(error)) {
+	su.save(recs, done)
 }
 
-func (su *saveableUpdatable) Update(ids []string, rec model.Model, fields []string) error {
-	return su.update(ids, rec, fields)
+func (su *saveableUpdatable) Update(ids []string, rec model.Model, fields []string, done func(error)) {
+	su.update(ids, rec, fields, done)
 }
 
 type saveableDeletable struct {
 	*core
 }
 
-func (sd *saveableDeletable) Save(recs ...model.Model) error {
-	return sd.save(recs...)
+func (sd *saveableDeletable) Save(recs []model.Model, done func(error)) {
+	sd.save(recs, done)
 }
 
-func (sd *saveableDeletable) Delete(ids ...string) error {
-	return sd.delete(ids...)
+func (sd *saveableDeletable) Delete(ids []string, done func(error)) {
+	sd.delete(ids, done)
 }
 
 type updatableDeletable struct {
 	*core
 }
 
-func (ud *updatableDeletable) Update(ids []string, rec model.Model, fields []string) error {
-	return ud.update(ids, rec, fields)
+func (ud *updatableDeletable) Update(ids []string, rec model.Model, fields []string, done func(error)) {
+	ud.update(ids, rec, fields, done)
 }
 
-func (ud *updatableDeletable) Delete(ids ...string) error {
-	return ud.delete(ids...)
+func (ud *updatableDeletable) Delete(ids []string, done func(error)) {
+	ud.delete(ids, done)
 }
 
 type crud struct {
 	*core
 }
 
-func (c *crud) Save(recs ...model.Model) error {
-	return c.save(recs...)
+func (c *crud) Save(recs []model.Model, done func(error)) {
+	c.save(recs, done)
 }
 
-func (c *crud) Update(ids []string, rec model.Model, fields []string) error {
-	return c.update(ids, rec, fields)
+func (c *crud) Update(ids []string, rec model.Model, fields []string, done func(error)) {
+	c.update(ids, rec, fields, done)
 }
 
-func (c *crud) Delete(ids ...string) error {
-	return c.delete(ids...)
+func (c *crud) Delete(ids []string, done func(error)) {
+	c.delete(ids, done)
 }

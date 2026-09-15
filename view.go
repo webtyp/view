@@ -38,21 +38,32 @@ type Presenter interface {
 
 	Items() []Item             // projected list from the last Reload
 	Filter(term string) []Item // local case-insensitive match over Label+Description; "" returns all
-	Reload() error             // asks the Lister for the records, then projects and indexes them
+
+	// Reload asks the Lister for the records, then projects and indexes them.
+	// The result is asynchronous: done runs once, after List delivers, and the
+	// renderer paints Items() from inside it. done is always safe to call even
+	// if the caller passes nil.
+	Reload(done func(error))
 
 	Selected() string             // currently selected id ("" if none)
 	Select(id string) model.Model // marks id and returns its record from the internal index; unknown id → nil, selection unchanged
 	Deselect()                    // clears the selection
 }
 
-// Saver creates or replaces WHOLE records. Variadic, not single: the one-record
-// case is N=1, so there is exactly one write path to implement, test and reason
-// about. This is what the "+" new-record flow and the edit-one-record form use.
+// Saver creates or replaces WHOLE records. A slice, not a single record: the
+// one-record case is a slice of one, so there is exactly one write path to
+// implement, test and reason about. This is what the "+" new-record flow and
+// the edit-one-record form use.
+//
+// The outcome arrives asynchronously through done, which is always non-nil:
+// Save never blocks and returns no error. Every failure — including the
+// programming errors view validates before reaching the lister — travels
+// through done, so there is exactly one way to report the result.
 //
 // Implemented by a Lister to declare the capability, and re-exposed by the
 // Presenter view.New returns when the backend has it.
 type Saver interface {
-	Save(recs ...model.Model) error
+	Save(recs []model.Model, done func(error))
 }
 
 // Updater patches ONLY the named columns across every id, in a single
@@ -69,18 +80,27 @@ type Saver interface {
 // fields holds Schema() field names and pairs directly with
 // form.DirtyFields(). An empty fields slice is an error, not a no-op.
 //
+// The outcome arrives asynchronously through done, which is always non-nil:
+// Update never blocks and returns no error. Every failure travels through
+// done, so there is exactly one way to report the result.
+//
 // Implemented by a Lister to declare the capability, and re-exposed by the
 // Presenter view.New returns when the backend has it.
 type Updater interface {
-	Update(ids []string, rec model.Model, fields []string) error
+	Update(ids []string, rec model.Model, fields []string, done func(error))
 }
 
-// Deleter removes records. Variadic for the same reason as Saver.
+// Deleter removes records. A slice for the same reason as Saver: the
+// one-record case is a slice of one.
+//
+// The outcome arrives asynchronously through done, which is always non-nil:
+// Delete never blocks and returns no error. Every failure travels through
+// done, so there is exactly one way to report the result.
 //
 // Implemented by a Lister to declare the capability, and re-exposed by the
 // Presenter view.New returns when the backend has it.
 type Deleter interface {
-	Delete(ids ...string) error
+	Delete(ids []string, done func(error))
 }
 
 type config struct {
