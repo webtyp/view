@@ -6,7 +6,7 @@ require (
 	webtyp.com/fmt v1.0.0
 	webtyp.com/input v0.0.9
 	webtyp.com/model v0.1.9
-	webtyp.com/router v0.1.37
+	webtyp.com/router v0.1.39
 )
 
 require webtyp.com/json v0.5.25 // indirect
