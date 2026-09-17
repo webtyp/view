@@ -6,14 +6,40 @@ import (
 	"webtyp.com/router"
 )
 
-// Ops names the remote operations a CallerLister invokes. An empty name means
-// the remote side does not offer that operation, and the returned Lister will
-// not carry the matching capability.
+// Ops names the remote operations a CallerLister invokes, scoped to Module —
+// the same string the server's router.OperationModule.ModelName() returns
+// for the module that harvests these operations (mcp.HarvestOps qualifies
+// every Tool.Name as "<ModelName>.<name>"; see that package's own doc).
+// NewCallerLister composes the identical qualified name here, so no caller
+// ever writes "module.op" as a hand-assembled literal — the two sides read
+// it off the same two strings (Module + the bare op name) instead of a
+// string neither owns.
+//
+// An empty op name means the remote side does not offer that operation, and
+// the returned Lister will not carry the matching capability.
 type Ops struct {
+	Module string
 	List   string
 	Save   string
 	Update string
 	Delete string
+}
+
+// qualified returns a copy of o with every non-empty op name prefixed by
+// Module — the exact transformation mcp.HarvestOps applies server-side.
+func (o Ops) qualified() Ops {
+	q := o
+	q.List = o.Module + "." + o.List
+	if o.Save != "" {
+		q.Save = o.Module + "." + o.Save
+	}
+	if o.Update != "" {
+		q.Update = o.Module + "." + o.Update
+	}
+	if o.Delete != "" {
+		q.Delete = o.Module + "." + o.Delete
+	}
+	return q
 }
 
 // NewCallerLister adapts a router.Caller (mcp, http, any transport) to the
@@ -23,12 +49,15 @@ type Ops struct {
 // newList builds the empty slice the transport decodes into; that is a codec
 // concern, which is why it lives here and not in New.
 //
-// Ops.List is required. The returned Lister implements exactly the write
-// capabilities whose op names are non-empty, so view.New's assertions stay
-// honest for a remote backend too.
+// Ops.Module and Ops.List are required. The returned Lister implements
+// exactly the write capabilities whose op names are non-empty, so view.New's
+// assertions stay honest for a remote backend too.
 func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) Lister {
 	if c == nil {
 		panic("view: NewCallerLister: caller is required")
+	}
+	if ops.Module == "" {
+		panic("view: NewCallerLister: Ops.Module is required — it must match the server module's ModelName()")
 	}
 	if ops.List == "" {
 		panic("view: NewCallerLister: Ops.List is required")
@@ -36,7 +65,7 @@ func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) 
 	if newList == nil {
 		panic("view: NewCallerLister: newList is required")
 	}
-	cb := &callerLister{caller: c, ops: ops, newList: newList}
+	cb := &callerLister{caller: c, ops: ops.qualified(), newList: newList}
 	hasS := ops.Save != ""
 	hasU := ops.Update != ""
 	hasD := ops.Delete != ""

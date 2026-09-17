@@ -20,7 +20,7 @@ type recordCaller struct {
 
 func (c *recordCaller) Call(op string, args model.Encodable, into model.Decodable, done func(err error)) {
 	c.calls = append(c.calls, recordCall{op: op, args: args})
-	if op == "l" && into != nil {
+	if op == "m.l" && into != nil {
 		if l, ok := into.(*conformance.MockList); ok {
 			a := l.Append().(*conformance.MockRecord)
 			a.ID, a.Name = "1", "Alice"
@@ -42,7 +42,7 @@ func newMockList() model.ModelSlice { return &conformance.MockList{} }
 func TestCallerListerTransport(t *testing.T) {
 	caller := &recordCaller{}
 	b := view.NewCallerLister(caller,
-		view.Ops{List: "l", Save: "s", Update: "u", Delete: "d"},
+		view.Ops{Module: "m", List: "l", Save: "s", Update: "u", Delete: "d"},
 		newMockList)
 	p := view.New(b, &conformance.MockRecord{}, view.WithTitle("t"))
 
@@ -65,8 +65,8 @@ func TestCallerListerTransport(t *testing.T) {
 	if serr != nil {
 		t.Fatalf("Save failed: %v", serr)
 	}
-	if len(caller.calls) != 1 || caller.calls[0].op != "s" {
-		t.Fatalf("expected 1 call to op %q, got %v", "s", caller.calls)
+	if len(caller.calls) != 1 || caller.calls[0].op != "m.s" {
+		t.Fatalf("expected 1 call to op %q, got %v", "m.s", caller.calls)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "name", "Ten") || !conformance.Has(pairs, "name", "Eleven") {
@@ -81,8 +81,8 @@ func TestCallerListerTransport(t *testing.T) {
 	if uerr != nil {
 		t.Fatalf("Update failed: %v", uerr)
 	}
-	if len(caller.calls) != 1 || caller.calls[0].op != "u" {
-		t.Fatalf("expected 1 call to op %q, got %v", "u", caller.calls)
+	if len(caller.calls) != 1 || caller.calls[0].op != "m.u" {
+		t.Fatalf("expected 1 call to op %q, got %v", "m.u", caller.calls)
 	}
 	pairs = conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "ids", "1") || !conformance.Has(pairs, "ids", "2") || !conformance.Has(pairs, "fields", "name") || !conformance.Has(pairs, "name", "Patched") {
@@ -103,8 +103,8 @@ func TestCallerListerTransport(t *testing.T) {
 	if derr != nil {
 		t.Fatalf("Delete failed: %v", derr)
 	}
-	if len(caller.calls) != 1 || caller.calls[0].op != "d" {
-		t.Fatalf("expected 1 call to op %q, got %v", "d", caller.calls)
+	if len(caller.calls) != 1 || caller.calls[0].op != "m.d" {
+		t.Fatalf("expected 1 call to op %q, got %v", "m.d", caller.calls)
 	}
 	pairs = conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "ids", "1") {
@@ -115,7 +115,7 @@ func TestCallerListerTransport(t *testing.T) {
 func TestCallerListerMissingDeleteOpCarriesNoCapability(t *testing.T) {
 	caller := &recordCaller{}
 	b := view.NewCallerLister(caller,
-		view.Ops{List: "l", Save: "s", Update: "u"},
+		view.Ops{Module: "m", List: "l", Save: "s", Update: "u"},
 		newMockList)
 
 	if _, ok := b.(view.Deleter); ok {

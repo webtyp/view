@@ -16,7 +16,7 @@ func TestModulePerspective(t *testing.T) {
 	record := &conformance.MockRecord{}
 
 	b := view.NewCallerLister(caller,
-		view.Ops{List: "list_items", Save: "save_item", Delete: "delete_item"},
+		view.Ops{Module: "m", List: "list_items", Save: "save_item", Delete: "delete_item"},
 		func() model.ModelSlice {
 			return &conformance.MockList{}
 		})
@@ -65,12 +65,12 @@ func TestModulePerspective(t *testing.T) {
 
 	var foundSaveCall bool
 	for _, call := range caller.Calls {
-		if call.Op == "save_item" {
+		if call.Op == "m.save_item" {
 			foundSaveCall = true
 		}
 	}
 	if !foundSaveCall {
-		t.Errorf("expected save call to save_item")
+		t.Errorf("expected save call to m.save_item")
 	}
 
 	// 4. Delete -> DeleteOp with ID
@@ -86,12 +86,12 @@ func TestModulePerspective(t *testing.T) {
 
 	var foundDeleteCall bool
 	for _, call := range caller.Calls {
-		if call.Op == "delete_item" {
+		if call.Op == "m.delete_item" {
 			foundDeleteCall = true
 		}
 	}
 	if !foundDeleteCall {
-		t.Errorf("expected delete call to delete_item")
+		t.Errorf("expected delete call to m.delete_item")
 	}
 
 	// 5. Deselect() -> Selected() is cleared

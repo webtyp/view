@@ -21,7 +21,7 @@ type dummyCaller struct {
 
 func (c *dummyCaller) Call(op string, args model.Encodable, into model.Decodable, done func(err error)) {
 	c.calls = append(c.calls, dummyCallerCall{op: op, args: args})
-	if op == "list_op" && into != nil {
+	if op == "m.list_op" && into != nil {
 		if l, ok := into.(*dummyList); ok {
 			a := l.Append().(*dummyRecord)
 			a.id, a.name = "1", "One"
@@ -81,7 +81,7 @@ func (l *dummyList) Append() model.Fielder {
 
 func setupView(caller *dummyCaller) view.Presenter {
 	b := view.NewCallerLister(caller,
-		view.Ops{List: "list_op", Save: "save_op", Update: "update_op", Delete: "delete_op"},
+		view.Ops{Module: "m", List: "list_op", Save: "save_op", Update: "update_op", Delete: "delete_op"},
 		func() model.ModelSlice { return &dummyList{} })
 	return view.New(b, &dummyRecord{}, view.WithTitle("t"))
 }
@@ -116,8 +116,8 @@ func TestSaveShipsEveryRecordInOneCall(t *testing.T) {
 	if len(caller.calls) != 1 {
 		t.Fatalf("expected 1 caller call, got %d", len(caller.calls))
 	}
-	if caller.calls[0].op != "save_op" {
-		t.Errorf("expected op 'save_op', got %q", caller.calls[0].op)
+	if caller.calls[0].op != "m.save_op" {
+		t.Errorf("expected op 'm.save_op', got %q", caller.calls[0].op)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "name", "A") || !conformance.Has(pairs, "name", "B") || !conformance.Has(pairs, "name", "C") {
@@ -166,8 +166,8 @@ func TestUpdateShipsIDsFieldsAndRecord(t *testing.T) {
 	if len(caller.calls) != 1 {
 		t.Fatalf("expected 1 call, got %d", len(caller.calls))
 	}
-	if caller.calls[0].op != "update_op" {
-		t.Errorf("expected op 'update_op', got %q", caller.calls[0].op)
+	if caller.calls[0].op != "m.update_op" {
+		t.Errorf("expected op 'm.update_op', got %q", caller.calls[0].op)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "ids", "1") || !conformance.Has(pairs, "ids", "2") || !conformance.Has(pairs, "fields", "name") || !conformance.Has(pairs, "name", "Patched") {
@@ -233,8 +233,8 @@ func TestDeleteShipsEveryIDInOneCall(t *testing.T) {
 	if len(caller.calls) != 1 {
 		t.Fatalf("expected 1 call, got %d", len(caller.calls))
 	}
-	if caller.calls[0].op != "delete_op" {
-		t.Errorf("expected op 'delete_op', got %q", caller.calls[0].op)
+	if caller.calls[0].op != "m.delete_op" {
+		t.Errorf("expected op 'm.delete_op', got %q", caller.calls[0].op)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "ids", "1") || !conformance.Has(pairs, "ids", "2") || !conformance.Has(pairs, "ids", "3") {
