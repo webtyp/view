@@ -8,7 +8,7 @@ require (
 	webtyp.com/lang v0.1.6
 	webtyp.com/mcp v0.2.40
 	webtyp.com/model v0.2.2
-	webtyp.com/router v0.4.1
+	webtyp.com/router v0.4.2
 )
 
 require (
