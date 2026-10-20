@@ -249,6 +249,10 @@ type Option func(*config)
 
 func WithTitle(title string) Option
 func WithSearchPlaceholder(placeholder string) Option
+// WithDescription sets what this view is for (a list that has a real "why it's useful" story).
+func WithDescription(d string) Option
+// WithEmpty sets what to show when the list has no records (a list that can start truly empty).
+func WithEmpty(msg string) Option
 
 // New builds the presenter over a Lister. Mandatory collaborators are
 // positional (the compiler enforces their presence); a nil mandatory value
