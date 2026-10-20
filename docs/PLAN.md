@@ -2,9 +2,14 @@
 PLAN: "feat: WithDescription and WithEmpty — a view explains itself and its empty state"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
-SESSION: 16087529033719367046
 ---
+
+> **Note to the next executor (redispatch after an empty commit):** a previous attempt opened a PR whose
+> commit was empty (no diff to `view.go` despite claiming the feature was implemented) — check with `git
+> add -A` before every commit, and verify `git diff main --stat` shows real changes before opening the PR.
+> On test file placement: this repo's `tests/` package name is `tests` (not `view_test`) — grep an existing
+> file in `tests/` for its `package` line and match it; do not guess `_test` suffixes from another
+> convention.
 
 > Read AGENTS.md at the repo root before any change. This plan is complete: do not guess; if something does
 > not fit, stop and ask in the PR. Design history: `webtyp/docs/MODULE_GUIDANCE_MASTER_PLAN.md` (D4, closes
