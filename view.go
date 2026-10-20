@@ -35,6 +35,12 @@ type Itemizer interface {
 type Presenter interface {
 	Title() string
 	SearchPlaceholder() lang.Text
+
+	// Description is what this view is for, shown when no record is selected. "" when WithDescription was not used.
+	Description() lang.Text
+
+	// EmptyMessage is what to show, and what to do, when Items() is empty. "" when WithEmpty was not used.
+	EmptyMessage() lang.Text
 	Record() model.Model
 
 	Items() []Item             // projected list from the last Reload
@@ -107,6 +113,8 @@ type Deleter interface {
 type config struct {
 	title             string
 	searchPlaceholder lang.Text
+	description       lang.Text
+	emptyMessage      lang.Text
 }
 
 // Option is a functional configuration option for New.
@@ -124,6 +132,16 @@ func WithSearchPlaceholder(placeholder lang.Text) Option {
 	return func(c *config) {
 		c.searchPlaceholder = placeholder
 	}
+}
+
+// WithDescription sets what this view is for, shown when no record is selected.
+func WithDescription(d lang.Text) Option {
+	return func(c *config) { c.description = d }
+}
+
+// WithEmpty sets what to show, and what to do, when the list has no records yet.
+func WithEmpty(msg lang.Text) Option {
+	return func(c *config) { c.emptyMessage = msg }
 }
 
 // New builds the presenter over a Lister. Mandatory collaborators are
@@ -155,6 +173,8 @@ func New(
 		record:            record,
 		title:             cfg.title,
 		searchPlaceholder: cfg.searchPlaceholder,
+		description:       cfg.description,
+		emptyMessage:      cfg.emptyMessage,
 	}
 
 	_, hasS := l.(Saver)

@@ -19,6 +19,8 @@ type core struct {
 	record            model.Model
 	title             string
 	searchPlaceholder lang.Text
+	description       lang.Text
+	emptyMessage      lang.Text
 
 	items    []Item
 	selected string
@@ -31,6 +33,14 @@ func (p *core) Title() string {
 
 func (p *core) SearchPlaceholder() lang.Text {
 	return p.searchPlaceholder
+}
+
+func (p *core) Description() lang.Text {
+	return p.description
+}
+
+func (p *core) EmptyMessage() lang.Text {
+	return p.emptyMessage
 }
 
 func (p *core) Record() model.Model {

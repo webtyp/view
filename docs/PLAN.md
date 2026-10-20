@@ -2,8 +2,10 @@
 PLAN: "feat: WithDescription and WithEmpty — a view explains itself and its empty state"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 15203441228956046925
+PR: https://github.com/webtyp/view/pull/7
+REVIEWED_COMMIT: 4199d6eb036037d2ce1ee5667f0013a2122487e1
 ---
 
 > **Note to the next executor (redispatch after an empty commit):** a previous attempt opened a PR whose
