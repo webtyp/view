@@ -2,8 +2,10 @@
 PLAN: "feat: WithDescription and WithEmpty — a view explains itself and its empty state"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 16087529033719367046
+PR: https://github.com/webtyp/view/pull/6
+REVIEWED_COMMIT: d5c739b5224597b5db46cf0278743bb788ebf6ae
 ---
 
 > Read AGENTS.md at the repo root before any change. This plan is complete: do not guess; if something does
