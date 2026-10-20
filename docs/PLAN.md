@@ -2,6 +2,8 @@
 PLAN: "feat: WithDescription and WithEmpty — a view explains itself and its empty state"
 EXECUTOR: jules
 REVIEWER: none
+STATUS: running
+SESSION: 16087529033719367046
 ---
 
 > Read AGENTS.md at the repo root before any change. This plan is complete: do not guess; if something does
