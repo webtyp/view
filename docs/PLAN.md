@@ -2,6 +2,8 @@
 PLAN: "feat: WithDescription and WithEmpty — a view explains itself and its empty state"
 EXECUTOR: jules
 REVIEWER: none
+STATUS: running
+SESSION: 15203441228956046925
 ---
 
 > **Note to the next executor (redispatch after an empty commit):** a previous attempt opened a PR whose
