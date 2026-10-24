@@ -2,8 +2,10 @@
 PLAN: "feat(lang): view ships its dictionary — lang.json with every language of lang.Supported() filled"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 12274797605227864188
+PR: https://github.com/webtyp/view/pull/8
+REVIEWED_COMMIT: 0b98c0978da69aa46ab207441360c8215303ab0c
 ---
 
 > Read AGENTS.md at the repo root before any change.
