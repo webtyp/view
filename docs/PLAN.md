@@ -56,3 +56,17 @@ GOPRIVATE=webtyp.com/*,github.com/veltylabs/* GOFLAGS=-mod=mod gotest
 | # | Files | Done when |
 |---|---|---|
 | 1 | `lang.json` (new) | no empty value in any column |
+
+## Executor notes
+
+Completed translation of `lang.json` with all required values for `es`, `zh`, `hi`, `ar`, `pt`, `fr`, `de`, `ru`.
+
+`langc sync .` generated the following reuse warnings which are acceptable per instructions:
+```
+lang: does not implement model.Model and does not implement view.Itemizer share does not implement — extract it as its own key and reuse it, see lang.json
+lang: view: Delete requires at least one id and view: Update requires at least one id share requires at least one id — extract it as its own key and reuse it, see lang.json
+lang: view: Save payload is nil and view: Save requires at least one record share view: Save — extract it as its own key and reuse it, see lang.json
+lang: view: Save payload is nil and view: Update record is nil share is nil — extract it as its own key and reuse it, see lang.json
+lang: view: Update record is nil and view: Update requires at least one field share view: Update — extract it as its own key and reuse it, see lang.json
+lang: view: Update requires at least one field and view: Update requires at least one id share view: Update requires at least one — extract it as its own key and reuse it, see lang.json
+```
