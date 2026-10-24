@@ -2,6 +2,8 @@
 PLAN: "feat(lang): view ships its dictionary — lang.json with every language of lang.Supported() filled"
 EXECUTOR: jules
 REVIEWER: none
+STATUS: running
+SESSION: 12274797605227864188
 ---
 
 > Read AGENTS.md at the repo root before any change.
