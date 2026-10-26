@@ -1,9 +1,18 @@
+
 package view
 
 import (
 	"webtyp.com/fmt"
 	"webtyp.com/lang"
 	"webtyp.com/model"
+)
+
+var (
+	opSavePrefix   = "view: Save"
+	opUpdatePrefix = "view: Update"
+	opDeletePrefix = "view: Delete"
+	identLister    = "lister"
+	identID        = "id"
 )
 
 // indexEntry pairs a record with its id. A slice of these replaces what used
@@ -70,7 +79,7 @@ func (p *core) Reload(done func(error)) {
 		for _, row := range rows {
 			iz, ok := row.(Itemizer)
 			if !ok {
-				done(fmt.Err("view: Reload: row type", rowName(row), "does not implement view.Itemizer"))
+				done(fmt.Err("view: Reload: row type", rowName(row), "does not implement", typeName("view.Itemizer")))
 				return
 			}
 			it := iz.Item()
@@ -140,19 +149,19 @@ func (c *core) save(recs []model.Model, done func(error)) {
 		done = func(error) {}
 	}
 	if len(recs) == 0 {
-		done(fmt.Err("view: Save requires at least one record"))
+		done(fmt.Err(opSavePrefix, "requires at least one", "record"))
 		return
 	}
 	for _, rec := range recs {
 		if model.IsNil(rec) {
-			done(fmt.Err("view: Save payload is nil"))
+			done(fmt.Err(opSavePrefix, "payload", "is nil"))
 			return
 		}
 	}
 
 	b, ok := c.lister.(Saver)
 	if !ok {
-		done(fmt.Err("view: Save: lister does not implement view.Saver"))
+		done(fmt.Err(opSavePrefix, ":", identLister, "does not implement", typeName("view.Saver")))
 		return
 	}
 	b.Save(recs, done)
@@ -163,21 +172,21 @@ func (c *core) update(ids []string, rec model.Model, fields []string, done func(
 		done = func(error) {}
 	}
 	if len(ids) == 0 {
-		done(fmt.Err("view: Update requires at least one id"))
+		done(fmt.Err(opUpdatePrefix, "requires at least one", identID))
 		return
 	}
 	if len(fields) == 0 {
-		done(fmt.Err("view: Update requires at least one field"))
+		done(fmt.Err(opUpdatePrefix, "requires at least one", "field"))
 		return
 	}
 	if model.IsNil(rec) {
-		done(fmt.Err("view: Update record is nil"))
+		done(fmt.Err(opUpdatePrefix, "record", "is nil"))
 		return
 	}
 
 	b, ok := c.lister.(Updater)
 	if !ok {
-		done(fmt.Err("view: Update: lister does not implement view.Updater"))
+		done(fmt.Err(opUpdatePrefix, ":", identLister, "does not implement", typeName("view.Updater")))
 		return
 	}
 	b.Update(ids, rec, fields, done)
@@ -236,7 +245,7 @@ func (c *core) delete(ids []string, done func(error)) {
 		done = func(error) {}
 	}
 	if len(ids) == 0 {
-		done(fmt.Err("view: Delete requires at least one id"))
+		done(fmt.Err(opDeletePrefix, "requires at least one", identID))
 		return
 	}
 	for _, id := range ids {
@@ -248,7 +257,7 @@ func (c *core) delete(ids []string, done func(error)) {
 
 	b, ok := c.lister.(Deleter)
 	if !ok {
-		done(fmt.Err("view: Delete: lister does not implement view.Deleter"))
+		done(fmt.Err(opDeletePrefix, ":", identLister, "does not implement", typeName("view.Deleter")))
 		return
 	}
 	b.Delete(ids, done)
@@ -331,3 +340,5 @@ func (c *crud) Update(ids []string, rec model.Model, fields []string, done func(
 func (c *crud) Delete(ids []string, done func(error)) {
 	c.delete(ids, done)
 }
+
+func typeName(name string) string { return name }
