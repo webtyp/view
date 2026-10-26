@@ -1,0 +1,14 @@
+{
+  "languages": ["es", "zh", "hi", "ar", "pt", "fr", "de", "ru"],
+  "keys": {
+    "does not implement": ["no implementa", "未实现", "लागू नहीं करता", "لا يطبق", "não implementa", "n'implémente pas", "implementiert nicht", "не реализует"],
+    "field": ["campo", "字段", "फ़ील्ड", "حقل", "campo", "champ", "Feld", "поле"],
+    "is nil": ["es nil", "为 nil", "nil है", "فارغ", "é nil", "est nil", "ist nil", "nil"],
+    "payload": ["carga útil", "负载", "पेलोड", "الحمولة", "payload", "charge utile", "Payload", "полезная нагрузка"],
+    "record": ["registro", "记录", "रिकॉर्ड", "السجل", "registro", "enregistrement", "Datensatz", "запись"],
+    "requires at least one": ["requiere al menos un", "需要至少一个", "के लिए कम से कम एक की आवश्यकता है", "يتطلب على الأقل", "requer pelo menos um", "nécessite au moins un", "erfordert mindestens ein", "требует хотя бы один"],
+    "view: Reload: row type": ["view: Reload: el tipo de fila", "view: Reload: 行类型", "view: Reload: पंक्ति प्रकार", "view: Reload: نوع الصف", "view: Reload: tipo de linha", "view: Reload: type de ligne", "view: Reload: Zeilentyp", "view: Reload: тип строки"],
+    "view: list returned by newList": ["view: la lista devuelta por newList", "view: newList 返回的列表", "view: newList द्वारा लौटाई गई सूची", "view: القائمة التي تم إرجاعها بواسطة newList", "view: a lista retornada por newList", "view: la liste retournée par newList", "view: die von newList zurückgegebene Liste", "view: список, возвращенный newList"],
+    "view: screen has no ID": ["view: la pantalla no tiene ID", "view: 屏幕没有 ID", "view: स्क्रीन का कोई ID नहीं है", "view: لا تحتوي الشاشة على معرف", "view: a tela não tem ID", "view: l'écran n'a pas d'ID", "view: Bildschirm hat keine ID", "view: у экрана нет ID"]
+  }
+}

@@ -134,7 +134,7 @@ func (b *callerLister) list(done func([]model.Model, error)) {
 	list := b.newList()
 	dec, ok := list.(model.Decodable)
 	if !ok {
-		done(nil, fmt.Err("view: list returned by newList does not implement model.Decodable"))
+		done(nil, fmt.Err("view: list returned by newList", "does not implement", typeName("model.Decodable")))
 		return
 	}
 	b.caller.Call(b.ops.List, nil, dec, func(err error) {
@@ -147,7 +147,7 @@ func (b *callerLister) list(done func([]model.Model, error)) {
 			row := list.At(i)
 			m, ok := row.(model.Model)
 			if !ok {
-				done(nil, fmt.Err("view: Reload: row type", rowName(row), "does not implement model.Model"))
+				done(nil, fmt.Err("view: Reload: row type", rowName(row), "does not implement", typeName("model.Model")))
 				return
 			}
 			rows = append(rows, m)
