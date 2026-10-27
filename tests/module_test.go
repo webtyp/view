@@ -15,7 +15,8 @@ func TestModulePerspective(t *testing.T) {
 	}
 	record := &conformance.MockRecord{}
 
-	b := view.NewCallerLister(caller,
+	recordsCaller := view.NewRecords().Caller(caller)
+	b := view.NewCallerLister(recordsCaller,
 		view.Ops{Module: "m", List: "list_items", Save: "save_item", Delete: "delete_item"},
 		func() model.ModelSlice {
 			return &conformance.MockList{}
@@ -58,6 +59,7 @@ func TestModulePerspective(t *testing.T) {
 		t.Fatalf("expected presenter to implement view.Saver")
 	}
 	var serr error
+	caller.CannedResult = []byte(`{"id":"m1","name":"Saved Module 1"}`)
 	s.Save([]model.Model{record}, func(e error) { serr = e })
 	if serr != nil {
 		t.Fatalf("save failed: %v", serr)

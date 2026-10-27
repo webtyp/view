@@ -76,6 +76,7 @@ func TestActions(t *testing.T) {
 
 	t.Run("NewCallerLister ops slice is unchanged and calls correct op", func(t *testing.T) {
 		caller := &testCaller{}
+		recordsCaller := view.NewRecords().Caller(caller)
 		ops := view.Ops{
 			Module: "network_manager",
 			List:   "plan_network",
@@ -83,7 +84,7 @@ func TestActions(t *testing.T) {
 				{Op: "apply_network", Label: "Apply"},
 			},
 		}
-		lister := view.NewCallerLister(caller, ops, func() model.ModelSlice { return &conformance.MockList{} })
+		lister := view.NewCallerLister(recordsCaller, ops, func() model.ModelSlice { return &conformance.MockList{} })
 
 		// Ensure caller's ops slice is unmodified
 		if ops.Actions[0].Op != "apply_network" {
@@ -103,15 +104,16 @@ func TestActions(t *testing.T) {
 
 	t.Run("Panics: empty Op, empty Label", func(t *testing.T) {
 		caller := &testCaller{}
+		recordsCaller := view.NewRecords().Caller(caller)
 		assertPanic(t, "view: NewCallerLister: Action.Op is required", func() {
-			view.NewCallerLister(caller, view.Ops{
+			view.NewCallerLister(recordsCaller, view.Ops{
 				Module: "m", List: "l",
 				Actions: []view.Action{{Label: "l"}},
 			}, func() model.ModelSlice { return &conformance.MockList{} })
 		})
 
 		assertPanic(t, "view: NewCallerLister: Action.Label is required", func() {
-			view.NewCallerLister(caller, view.Ops{
+			view.NewCallerLister(recordsCaller, view.Ops{
 				Module: "m", List: "l",
 				Actions: []view.Action{{Op: "o"}},
 			}, func() model.ModelSlice { return &conformance.MockList{} })

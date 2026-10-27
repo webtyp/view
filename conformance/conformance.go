@@ -26,6 +26,14 @@ type FakeLister struct {
 
 	ActionList []view.Action
 	Ran        []string
+	records    *view.Records
+}
+
+func (b *FakeLister) Records() *view.Records {
+	if b.records == nil {
+		b.records = view.NewRecords()
+	}
+	return b.records
 }
 
 func (b *FakeLister) Actions() []view.Action {
@@ -58,6 +66,7 @@ func (b *FakeLister) Save(recs []model.Model, done func(error)) {
 		return
 	}
 	b.SavedRecords = append(b.SavedRecords, recs...)
+	b.Records().Put(recs...)
 	done(nil)
 }
 
@@ -78,6 +87,7 @@ func (b *FakeLister) Delete(ids []string, done func(error)) {
 		return
 	}
 	b.DeletedIDs = append(b.DeletedIDs, ids...)
+	b.Records().Remove("MockRecord", ids...)
 	done(nil)
 }
 
@@ -91,7 +101,15 @@ var (
 // listOnlyLister implements List and nothing else: the double for the
 // negative capability clauses below.
 type listOnlyLister struct {
-	rows []model.Model
+	rows    []model.Model
+	records *view.Records
+}
+
+func (b *listOnlyLister) Records() *view.Records {
+	if b.records == nil {
+		b.records = view.NewRecords()
+	}
+	return b.records
 }
 
 func (b *listOnlyLister) List(done func([]model.Model, error)) {
@@ -104,8 +122,16 @@ func (b *listOnlyLister) List(done func([]model.Model, error)) {
 // rule (a backend with Save yields a Presenter that IS a Saver and is NOT an
 // Updater/Deleter).
 type listSaveLister struct {
-	rows  []model.Model
-	saved []model.Model
+	rows    []model.Model
+	saved   []model.Model
+	records *view.Records
+}
+
+func (b *listSaveLister) Records() *view.Records {
+	if b.records == nil {
+		b.records = view.NewRecords()
+	}
+	return b.records
 }
 
 func (b *listSaveLister) List(done func([]model.Model, error)) {
@@ -125,8 +151,16 @@ func (b *listSaveLister) Save(recs []model.Model, done func(error)) {
 // releases done manually and asserts the projection only then, so any renderer
 // that assumes the rows exist when List returns fails here.
 type deferredLister struct {
-	rows []model.Model
-	done func([]model.Model, error)
+	rows    []model.Model
+	done    func([]model.Model, error)
+	records *view.Records
+}
+
+func (b *deferredLister) Records() *view.Records {
+	if b.records == nil {
+		b.records = view.NewRecords()
+	}
+	return b.records
 }
 
 func (b *deferredLister) List(done func([]model.Model, error)) {
@@ -190,7 +224,7 @@ func (m *MockRecord) Schema() []model.Field {
 		// visible, loads through the form inputs and hides every hidden-PK
 		// defect (see app-demo PLAN §2bis).
 		{Name: "id", Type: input.Text(), NotNull: true, DB: &model.FieldDB{PK: true}},
-		{Name: "name", Type: input.Text()},
+		{Name: "name", Type: input.Text(), Row: model.RowTitle},
 	}
 }
 
@@ -212,15 +246,6 @@ func (m *MockRecord) DecodeFields(r model.FieldReader) {
 	}
 	if val, ok := r.String("name"); ok {
 		m.Name = val
-	}
-}
-
-// Item implements view.Itemizer.
-func (m *MockRecord) Item() view.Item {
-	return view.Item{
-		ID:          m.ID,
-		Label:       m.Name,
-		Description: "Desc of " + m.Name,
 	}
 }
 
@@ -668,11 +693,11 @@ func Run(t *testing.T, f Factory) {
 		}
 	})
 
-	t.Run("filter_matches_label_and_description", func(t *testing.T) {
+	t.Run("filter_matches_label", func(t *testing.T) {
 		fb := &FakeLister{
 			Rows: []model.Model{
-				&MockRecord{ID: "1", Name: "Alice"}, // description will be "Desc of Alice"
-				&MockRecord{ID: "2", Name: "Bob"},   // description will be "Desc of Bob"
+				&MockRecord{ID: "1", Name: "Alice"},
+				&MockRecord{ID: "2", Name: "Bob"},
 			},
 		}
 		record := &MockRecord{}
@@ -685,12 +710,6 @@ func Run(t *testing.T, f Factory) {
 		res := p.Filter("alice")
 		if len(res) != 1 || res[0].ID != "1" {
 			t.Errorf("expected 1 result matching 'alice', got %v", res)
-		}
-
-		// Case-insensitive match on description:
-		res = p.Filter("bOb")
-		if len(res) != 1 || res[0].ID != "2" {
-			t.Errorf("expected 1 result matching 'bOb', got %v", res)
 		}
 
 		// Empty term returns all:

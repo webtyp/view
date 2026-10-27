@@ -21,11 +21,9 @@ func leaf(id string) view.Screen {
 	return view.Screen{ID: id, Label: "Services", Icon: "services", Permission: "service", Presenter: leafPresenter()}
 }
 
-// A module's screens as the renderer receives them: a group with two leaves,
-// one of them filling a select from another list.
+// A module's screens as the renderer receives them: a group with two leaves.
 func TestScreen_ValidGroupAndLeaves(t *testing.T) {
 	services := leaf("catalog.services")
-	services.Lookups = []view.Lookup{{Field: "specialty_id", Source: leafPresenter()}}
 	group := view.Screen{
 		ID: "catalog", Label: "Catalog", Icon: "catalog", Help: "Services and their specialties.",
 		Children: []view.Screen{services, leaf("catalog.specialties")},
@@ -65,8 +63,6 @@ func TestScreen_InvalidShapesNameTheScreen(t *testing.T) {
 	noPermission.Permission = ""
 	leafWithHelp := leaf("x")
 	leafWithHelp.Help = "dup"
-	badLookup := leaf("x")
-	badLookup.Lookups = []view.Lookup{{Field: "zone_id"}}
 	groupWithPresenter := view.Screen{ID: "g", Label: "G", Icon: "g", Help: "h", Presenter: leafPresenter(), Children: []view.Screen{leaf("x")}}
 	groupNoHelp := view.Screen{ID: "g", Label: "G", Icon: "g", Children: []view.Screen{leaf("x")}}
 	badChild := view.Screen{ID: "g", Label: "G", Icon: "g", Help: "h", Children: []view.Screen{noPermission}}
@@ -74,7 +70,6 @@ func TestScreen_InvalidShapesNameTheScreen(t *testing.T) {
 	compBoth := leaf("x")
 	compBoth.Component = comp()
 	compNoHelp := view.Screen{ID: "x", Label: "X", Icon: "x", Permission: "p", Component: comp()}
-	compLookups := view.Screen{ID: "x", Label: "X", Icon: "x", Permission: "p", Component: comp(), Help: "h", Lookups: []view.Lookup{{Field: "y", Source: leafPresenter()}}}
 	compNoPermission := view.Screen{ID: "x", Label: "X", Icon: "x", Component: comp(), Help: "h"}
 	groupWithComponent := view.Screen{ID: "g", Label: "G", Icon: "g", Help: "h", Component: comp(), Children: []view.Screen{leaf("x")}}
 
@@ -89,13 +84,11 @@ func TestScreen_InvalidShapesNameTheScreen(t *testing.T) {
 		{"leaf without presenter", view.Screen{ID: "x", Label: "X", Icon: "x"}, "needs a Presenter or a Component: x"},
 		{"both", compBoth, "both a Presenter and a Component: x"},
 		{"component without help", compNoHelp, "with a Component needs Help: x"},
-		{"component with lookups", compLookups, "with a Component cannot have Lookups: x"},
 		{"component without permission", compNoPermission, "needs a Permission: x"},
 		{"leaf without permission", noPermission, "needs a Permission: x"},
 		{"leaf with Help", leafWithHelp, "not Help: x"},
-		{"incomplete lookup", badLookup, "lookup needs Field and Source: x"},
-		{"group with presenter", groupWithPresenter, "cannot have a Presenter, Component, Permission or Lookups: g"},
-		{"group with component", groupWithComponent, "cannot have a Presenter, Component, Permission or Lookups: g"},
+		{"group with presenter", groupWithPresenter, "cannot have a Presenter, Component or Permission: g"},
+		{"group with component", groupWithComponent, "cannot have a Presenter, Component or Permission: g"},
 		{"group without help", groupNoHelp, "needs Help: g"},
 		{"invalid child", badChild, "needs a Permission: x"},
 	}

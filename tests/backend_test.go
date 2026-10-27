@@ -12,7 +12,15 @@ import (
 // opaque stub. It proves the Lister seam carries a consumer from list
 // through every write and back to list.
 type memStore struct {
-	rows []*conformance.MockRecord
+	rows    []*conformance.MockRecord
+	records *view.Records
+}
+
+func (s *memStore) Records() *view.Records {
+	if s.records == nil {
+		s.records = view.NewRecords()
+	}
+	return s.records
 }
 
 func (s *memStore) List(done func([]model.Model, error)) {
@@ -37,6 +45,7 @@ func (s *memStore) Save(recs []model.Model, done func(error)) {
 			s.rows = append(s.rows, rec)
 		}
 	}
+	s.Records().Put(recs...)
 	done(nil)
 }
 
@@ -75,6 +84,7 @@ func (s *memStore) Delete(ids []string, done func(error)) {
 		}
 	}
 	s.rows = kept
+	s.Records().Remove("MockRecord", ids...)
 	done(nil)
 }
 

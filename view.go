@@ -11,23 +11,13 @@ type Item struct {
 	ID          string // selection key
 	Label       string // primary text
 	Description string // secondary text (a SKU, an IP, a subtitle)
-
-	// LeadTop/LeadMain/LeadBottom are an OPTIONAL three-line badge for the row's
-	// leading slot — position only, no assumed content: a renderer that draws a
-	// plain row (targetlist) ignores them; one built around a prominent leading
-	// badge (targetdate) reads them instead of Label for that slot. What goes in
-	// them — a date, an hour, anything else — is the consumer's call, not this
-	// type's. Empty means "no badge" — Filter (below) never looks at these, so
-	// leaving them blank never breaks search.
-	LeadTop    string
-	LeadMain   string
-	LeadBottom string
+	Badge       string // the leading badge (model.RowBadge field), e.g. a date or an hour; "" = none
 }
 
-// Itemizer is implemented by a domain record that knows how to project itself as a
-// list row. It is the ONLY view-specific code a module writes on its model.
-type Itemizer interface {
-	Item() Item
+// itemOf projects a record as a list row from its fields (model.RowOf).
+func itemOf(rec model.Model) Item {
+	r := model.RowOf(rec)
+	return Item{ID: r.ID, Label: r.Title, Description: r.Detail, Badge: r.Badge}
 }
 
 // Presenter is the UI-agnostic core behind any CRUD view: list, select, reload.
@@ -43,7 +33,7 @@ type Presenter interface {
 	EmptyMessage() lang.Text
 	Record() model.Model
 
-	Items() []Item             // projected list from the last Reload
+	Items() []Item             // the rows of this presenter's model, newest first
 	Filter(term string) []Item // local case-insensitive match over Label+Description; "" returns all
 
 	// Reload asks the Lister for the records, then projects and indexes them.
@@ -55,6 +45,11 @@ type Presenter interface {
 	Selected() string             // currently selected id ("" if none)
 	Select(id string) model.Model // marks id and returns its record from the internal index; unknown id → nil, selection unchanged
 	Deselect()                    // clears the selection
+
+	// OnChange registers fn to run after any record of this presenter's model
+	// changes in the shared Records (a save from any screen, a sync). A renderer
+	// re-reads Items() inside fn.
+	OnChange(fn func())
 }
 
 // Saver creates or replaces WHOLE records. A slice, not a single record: the

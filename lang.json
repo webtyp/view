@@ -1,6 +1,7 @@
 {
   "languages": ["es", "zh", "hi", "ar", "pt", "fr", "de", "ru"],
   "keys": {
+    "\u003cunnamed type\u003e": ["\u003ctipo sin nombre\u003e", "\u003c未命名类型\u003e", "\u003cअनाम प्रकार\u003e", "\u003cنوع غير مسمى\u003e", "\u003ctipo sem nome\u003e", "\u003ctype sans nom\u003e", "\u003cunbenannter Typ\u003e", "\u003cбезымянный тип\u003e"],
     "does not implement": ["no implementa", "未实现", "लागू नहीं करता", "لا يطبق", "não implementa", "n'implémente pas", "implementiert nicht", "не реализует"],
     "field": ["campo", "字段", "फ़ील्ड", "حقل", "campo", "champ", "Feld", "поле"],
     "is nil": ["es nil", "为 nil", "nil है", "فارغ", "é nil", "est nil", "ist nil", "nil"],

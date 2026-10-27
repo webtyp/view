@@ -51,8 +51,8 @@ func (r *dummyRecord) ModelName() string { return "dummyRecord" }
 func (r *dummyRecord) IsNil() bool       { return r == nil }
 func (r *dummyRecord) Schema() []model.Field {
 	return []model.Field{
-		{Name: "id", Type: input.Text()},
-		{Name: "name", Type: input.Text()},
+		{Name: "id", Type: input.Text(), DB: &model.FieldDB{PK: true}},
+		{Name: "name", Type: input.Text(), Row: model.RowTitle},
 	}
 }
 func (r *dummyRecord) Pointers() []any { return []any{&r.id, &r.name} }
@@ -60,9 +60,13 @@ func (r *dummyRecord) EncodeFields(w model.FieldWriter) {
 	w.String("id", r.id)
 	w.String("name", r.name)
 }
-func (r *dummyRecord) DecodeFields(fr model.FieldReader) {}
-func (r *dummyRecord) Item() view.Item {
-	return view.Item{ID: r.id, Label: r.name}
+func (r *dummyRecord) DecodeFields(fr model.FieldReader) {
+	if val, ok := fr.String("id"); ok {
+		r.id = val
+	}
+	if val, ok := fr.String("name"); ok {
+		r.name = val
+	}
 }
 
 type dummyList struct {
@@ -80,7 +84,8 @@ func (l *dummyList) Append() model.Fielder {
 }
 
 func setupView(caller *dummyCaller) view.Presenter {
-	b := view.NewCallerLister(caller,
+	recordsCaller := view.NewRecords().Caller(caller)
+	b := view.NewCallerLister(recordsCaller,
 		view.Ops{Module: "m", List: "list_op", Save: "save_op", Update: "update_op", Delete: "delete_op"},
 		func() model.ModelSlice { return &dummyList{} })
 	return view.New(b, &dummyRecord{}, view.WithTitle("t"))
@@ -245,8 +250,16 @@ func TestDeleteShipsEveryIDInOneCall(t *testing.T) {
 // deferredLister captures done and returns without invoking it: the shape of a
 // real transport, whose result arrives in a later turn of the event loop.
 type deferredLister struct {
-	rows []model.Model
-	done func([]model.Model, error)
+	rows    []model.Model
+	done    func([]model.Model, error)
+	records *view.Records
+}
+
+func (l *deferredLister) Records() *view.Records {
+	if l.records == nil {
+		l.records = view.NewRecords()
+	}
+	return l.records
 }
 
 func (l *deferredLister) List(done func([]model.Model, error)) { l.done = done }

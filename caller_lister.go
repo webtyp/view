@@ -64,6 +64,10 @@ func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) 
 	if c == nil {
 		panic("view: NewCallerLister: caller is required")
 	}
+	rc, ok := c.(*recordsCaller)
+	if !ok {
+		panic("view: NewCallerLister: caller must come from view.Records.Caller — build it once per page: view.NewRecords().Caller(c)")
+	}
 	if ops.Module == "" {
 		panic("view: NewCallerLister: Ops.Module is required — it must match the server module's ModelName()")
 	}
@@ -81,7 +85,14 @@ func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) 
 			panic("view: NewCallerLister: Action.Label is required")
 		}
 	}
-	cb := &callerLister{caller: c, ops: ops.qualified(), rawActions: ops.Actions, newList: newList}
+	cb := &callerLister{
+		caller:     c,
+		ops:        ops.qualified(),
+		rawActions: ops.Actions,
+		newList:    newList,
+		records:    rc.records,
+		modelName:  newList().Append().(model.Model).ModelName(),
+	}
 	hasS := ops.Save != ""
 	hasU := ops.Update != ""
 	hasD := ops.Delete != ""
@@ -110,7 +121,11 @@ type callerLister struct {
 	ops        Ops
 	rawActions []Action // The UNPREFIXED bare operations to match p.Run(op)
 	newList    func() model.ModelSlice
+	records    *Records
+	modelName  string
 }
+
+func (b *callerLister) Records() *Records { return b.records }
 
 func (b *callerLister) Actions() []Action {
 	return b.rawActions
@@ -147,7 +162,7 @@ func (b *callerLister) list(done func([]model.Model, error)) {
 			row := list.At(i)
 			m, ok := row.(model.Model)
 			if !ok {
-				done(nil, fmt.Err("view: Reload: row type", rowName(row), "does not implement", typeName("model.Model")))
+				done(nil, fmt.Err("view: Reload: row type", "<unnamed type>", "does not implement", typeName("model.Model")))
 				return
 			}
 			rows = append(rows, m)
@@ -157,7 +172,17 @@ func (b *callerLister) list(done func([]model.Model, error)) {
 }
 
 func (b *callerLister) save(recs []model.Model, done func(error)) {
-	b.caller.Call(b.ops.Save, &saveArgs{recs: recs}, nil, done)
+	saved, ok := b.newList().Append().(model.Model)
+	if !ok {
+		done(fmt.Err("view: list returned by newList", "does not implement", typeName("model.Model")))
+		return
+	}
+	b.caller.Call(b.ops.Save, &saveArgs{recs: recs}, saved, func(err error) {
+		if err == nil {
+			b.records.Put(saved)
+		}
+		done(err)
+	})
 }
 
 func (b *callerLister) update(ids []string, rec model.Model, fields []string, done func(error)) {
@@ -165,7 +190,12 @@ func (b *callerLister) update(ids []string, rec model.Model, fields []string, do
 }
 
 func (b *callerLister) delete(ids []string, done func(error)) {
-	b.caller.Call(b.ops.Delete, &deleteArgs{ids: ids}, nil, done)
+	b.caller.Call(b.ops.Delete, &deleteArgs{ids: ids}, nil, func(err error) {
+		if err == nil {
+			b.records.Remove(b.modelName, ids...)
+		}
+		done(err)
+	})
 }
 
 // Compile-time assertions for ActionRunner on all capability wrappers

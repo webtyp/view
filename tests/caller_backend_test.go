@@ -41,7 +41,8 @@ func newMockList() model.ModelSlice { return &conformance.MockList{} }
 
 func TestCallerListerTransport(t *testing.T) {
 	caller := &recordCaller{}
-	b := view.NewCallerLister(caller,
+	recordsCaller := view.NewRecords().Caller(caller)
+	b := view.NewCallerLister(recordsCaller,
 		view.Ops{Module: "m", List: "l", Save: "s", Update: "u", Delete: "d"},
 		newMockList)
 	p := view.New(b, &conformance.MockRecord{}, view.WithTitle("t"))
@@ -114,7 +115,8 @@ func TestCallerListerTransport(t *testing.T) {
 
 func TestCallerListerMissingDeleteOpCarriesNoCapability(t *testing.T) {
 	caller := &recordCaller{}
-	b := view.NewCallerLister(caller,
+	recordsCaller := view.NewRecords().Caller(caller)
+	b := view.NewCallerLister(recordsCaller,
 		view.Ops{Module: "m", List: "l", Save: "s", Update: "u"},
 		newMockList)
 
