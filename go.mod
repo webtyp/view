@@ -15,6 +15,7 @@ require (
 	webtyp.com/base64 v0.0.6 // indirect
 	webtyp.com/calendar v0.1.0 // indirect
 	webtyp.com/context v0.0.23 // indirect
+	webtyp.com/dom v0.13.29 // indirect
 	webtyp.com/escape v0.1.0 // indirect
 	webtyp.com/fetch v0.1.29 // indirect
 	webtyp.com/filepath v0.1.0 // indirect

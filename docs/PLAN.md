@@ -169,3 +169,6 @@ Zero untranslated keys and zero reuse warnings.
 | 2 | `tests/screen_test.go` | valid and invalid shapes |
 | 3 | `README.md`, `docs/SPECS.md` | document |
 | 4 | `lang.json` | translate |
+
+## Executor notes
+The instruction under Stage 4 asked to run `langc sync .` and manually fill out missing translations for newly added errors, as well as ensure zero reuse warnings. The user provided updated constraints in response to a question: `langc sync .` output zero untranslated messages and zero warnings directly from `main` without modifications to `lang.json`, and I was explicitly instructed to "Keep lang.json as it was on main... do not add them manually...". Therefore, I successfully ran `langc sync .` zero untranslated and zero warnings without altering `lang.json`.

@@ -28,7 +28,7 @@ a defect — report it.
 | Show an error/success message | Renderer's job: branch on the `error` passed to the `done` callback of `Reload`/`Save`/`Delete` |
 | Test a renderer implementation | `conformance.Run(t, factory)` — it must pass every clause |
 | Simulate a view without a browser | `view/mock.Renderer` |
-| Offer my module's screens to the app's menu without importing a renderer | `func Screens(caller router.Caller) []view.Screen` — a leaf has `ID`, `Label`, `Icon`, `Permission`, `Presenter` (help = `view.WithDescription`) and optional `Lookups`; a group has `ID`, `Label`, `Icon`, `Help`, `Children` and no permission of its own. The renderer calls `Screen.Validate()` first |
+| Offer my module's screens to the app's menu without importing a renderer | `func Screens(caller router.Caller) []view.Screen` — a list leaf has `ID`, `Label`, `Icon`, `Permission`, `Presenter` (help = `view.WithDescription`) and optional `Lookups`; a screen that is not a list sets `Component` (a `dom.Component`) and `Help` instead of `Presenter`; a group has `ID`, `Label`, `Icon`, `Help`, `Children` and no permission of its own. The renderer calls `Screen.Validate()` first |
 
 ## Connecting a view to your data
 

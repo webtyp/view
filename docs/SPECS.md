@@ -26,6 +26,18 @@ import (
 	"webtyp.com/router"
 )
 
+// Screen is one entry a module offers to the app's menu, declared as data.
+// A Screen is either a leaf (it has a Presenter) or a group (it has Children):
+//
+//   - list leaf: ID, Label, Icon, Permission and Presenter are required. Its help
+//     text is the Presenter's Description() (view.WithDescription), never a
+//     second copy here.
+//   - component leaf: ID, Label, Icon, Permission, Component and Help are required;
+//     no Presenter and no Lookups. For a screen that is not a list.
+//   - group: ID, Label, Icon, Help and Children are required; it has no
+//     Presenter, Component or Permission of its own — the menu shows it only when
+//     the user may see at least one child, and opening it opens the first one.
+
 // Item is ONE projected row of the list.
 type Item struct {
 	ID          string // selection key
