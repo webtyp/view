@@ -14,7 +14,7 @@ a defect — report it.
 | I want to… | Use |
 |---|---|
 | Create a list/detail view for my model | `view.New(lister, &X{}, opts...)` where `lister` implements `view.Lister` |
-| Make my rows appear in the list | Implement `Item() view.Item` on the record type (`view.Itemizer`) |
+| Make my rows appear in the list | Fields map to the row via `model.RowOf` |
 | Enable saving | Implement `Save(recs []model.Model, done func(error))` — the returned Presenter then satisfies `view.Saver` |
 | Enable field patches | Implement `Update(ids []string, rec model.Model, fields []string, done func(error))` — the Presenter then satisfies `view.Updater` |
 | Enable deleting | Implement `Delete(ids []string, done func(error))` — the returned Presenter then satisfies `view.Deleter` |
@@ -23,12 +23,12 @@ a defect — report it.
 | Pick a record and get its full model | `m := p.Select(id)` (`nil` if the id is unknown) |
 | Clear the selection | `p.Deselect()` |
 | Filter the list as the user types | `p.Filter(term)` (local, case-insensitive over Label+Description) |
-| Connect over a transport (mcp, http) | `view.NewCallerLister(caller, view.Ops{…}, newList)` then `view.New(l, &X{}, …)` |
+| Connect over a transport (mcp, http) | `view.NewCallerLister(records.Caller(caller), view.Ops{…}, newList)` then `view.New(l, &X{}, …)` |
 | Run a command on the whole list | `Ops.Actions` + `presenter.(view.Actioner).Run(op, done)` |
 | Show an error/success message | Renderer's job: branch on the `error` passed to the `done` callback of `Reload`/`Save`/`Delete` |
 | Test a renderer implementation | `conformance.Run(t, factory)` — it must pass every clause |
 | Simulate a view without a browser | `view/mock.Renderer` |
-| Offer my module's screens to the app's menu without importing a renderer | `func Screens(caller router.Caller) []view.Screen` — a list leaf has `ID`, `Label`, `Icon`, `Permission`, `Presenter` (help = `view.WithDescription`) and optional `Lookups`; a screen that is not a list sets `Component` (a `dom.Component`) and `Help` instead of `Presenter`; a group has `ID`, `Label`, `Icon`, `Help`, `Children` and no permission of its own. The renderer calls `Screen.Validate()` first |
+| Offer my module's screens to the app's menu without importing a renderer | `func Screens(caller router.Caller) []view.Screen` — a list leaf has `ID`, `Label`, `Icon`, `Permission`, `Presenter` (help = `view.WithDescription`); a screen that is not a list sets `Component` (a `dom.Component`) and `Help` instead of `Presenter`; a group has `ID`, `Label`, `Icon`, `Help`, `Children` and no permission of its own. The renderer calls `Screen.Validate()` first |
 
 ## Connecting a view to your data
 
@@ -183,12 +183,7 @@ type Item struct {
 	ID          string // selection key
 	Label       string // primary text
 	Description string // secondary text (a SKU, an IP, a subtitle)
-}
-
-// Itemizer is implemented by a domain record that knows how to project itself as a
-// list row. It is the ONLY view-specific code a module writes on its model.
-type Itemizer interface {
-	Item() Item
+	Badge       string // the leading badge (model.RowBadge field), e.g. a date or an hour; "" = none
 }
 
 // Presenter is the UI-agnostic core behind any CRUD view: list, select, reload.
@@ -198,7 +193,7 @@ type Presenter interface {
 	SearchPlaceholder() string
 	Record() model.Model
 
-	Items() []Item             // projected list from the last Reload
+	Items() []Item             // the rows of this presenter's model, newest first
 	Filter(term string) []Item // local case-insensitive match over Label+Description; "" returns all
 
 	// Reload asks the Lister for the records, then projects and indexes them.
@@ -209,6 +204,11 @@ type Presenter interface {
 	Selected() string             // currently selected id ("" if none)
 	Select(id string) model.Model // marks id and returns its record from the internal index; unknown id → nil, selection unchanged
 	Deselect()                    // clears the selection
+
+	// OnChange registers fn to run after any record of this presenter's model
+	// changes in the shared Records (a save from any screen, a sync). A renderer
+	// re-reads Items() inside fn.
+	OnChange(fn func())
 }
 
 // Capabilities. The renderer discovers them by type assertion at the seam.
@@ -264,7 +264,7 @@ func New(l Lister, record model.Model, opts ...Option) Presenter
 
 ## Quick Start
 
-### 1. The domain module declares its view (3 steps)
+### 1. The domain module declares its view (2 steps)
 
 ```go
 package catalog
@@ -274,26 +274,21 @@ import (
 	"webtyp.com/view"
 )
 
-// Step 1 — the record projects itself as a list row.
-func (c *CatalogItem) Item() view.Item {
-	return view.Item{ID: c.ID, Label: c.Name, Description: c.SKU}
-}
-
-// Step 2 — the store implements the domain seam (List + the writes it supports).
+// Step 1 — the store implements the domain seam (List + the writes it supports).
 type catalogStore struct{ /* … */ }
 
 func (s *catalogStore) List(done func([]model.Model, error)) { /* … done(rows, err) */ }
 func (s *catalogStore) Save(recs []model.Model, done func(error)) { /* … done(err) */ }
 
-// Step 3 — build the presenter. No projection loop, no cache, no fill:
-// the presenter lists through the lister and indexes id → model itself.
+// Step 2 — build the presenter. No projection loop, no cache, no fill:
+// the presenter lists through the lister and reads the shared view.Records.
 func NewCatalogView(store *catalogStore) view.Presenter {
 	return view.New(store, &CatalogItem{}, view.WithTitle("Catalog Management"))
 }
 ```
 
 That is the entire module-side code. `CatalogItem` is generated by `ormc` and
-already satisfies `model.Model`.
+already satisfies `model.Model`, and its fields map to the row via `model.RowOf`.
 
 ### 2. The renderer wraps the presenter (UI layer)
 
@@ -356,10 +351,7 @@ func (r *Renderer) OnSearchTyped(term string) {
   pattern). Logging and continuing would return a half-built presenter that crashes far
   from the cause — a deferred silent failure, which the harness forbids.
 - Misuse that cannot be made a compile error is a loud error, never silence:
-  `Delete` of an unknown id errors (nothing is sent); a row that does not
-  implement `Itemizer` makes `Reload` fail naming the offending
-  record (via `model.ModuleNaming.ModelName()` when the row provides it —
-  `webtyp/fmt` has no reflect-based type-name formatter by design).
+  `Delete` of an unknown id errors (nothing is sent).
 
 ## Design Goals
 
@@ -393,7 +385,7 @@ To ensure 100% compatibility with WebAssembly (WASM) and TinyGo targets, standar
   tests.
 - **`view/conformance`** — exports `conformance.Run(t, Factory)` plus the
   `conformance.FakeLister` typed double. A renderer is correct
-  only if it passes every clause (list load on mount, label rendering via `Itemizer`,
+  only if it passes every clause (list load on mount, label rendering via `model.RowOf`,
   select/deselect, save/delete capability assertions, filter semantics, loud errors on
   unknown ids). `conformance.Payload`/`conformance.Has` assert the wire shape a
   `router.Caller` double saw — the tool for testing the transport path.

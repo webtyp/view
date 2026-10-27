@@ -15,14 +15,6 @@ var (
 	identID        = "id"
 )
 
-// indexEntry pairs a record with its id. A slice of these replaces what used
-// to be a map[string]model.Model: this file compiles to WASM, and a map pulls
-// TinyGo's hashing machinery into the browser binary.
-type indexEntry struct {
-	id  string
-	rec model.Model
-}
-
 type core struct {
 	lister            Lister
 	record            model.Model
@@ -31,9 +23,8 @@ type core struct {
 	description       lang.Text
 	emptyMessage      lang.Text
 
-	items    []Item
+	order    []string // ids of the last List, in its order; ids put later go first
 	selected string
-	index    []indexEntry
 }
 
 func (p *core) Title() string {
@@ -56,9 +47,25 @@ func (p *core) Record() model.Model {
 	return p.record
 }
 
+// Items: the rows of this model in the shared copy — those this presenter never
+// listed (saved here or elsewhere, synced) first, then the listed ones in List order.
 func (p *core) Items() []Item {
-	return p.items
+	all := p.lister.Records().All(p.record.ModelName())
+	var fresh, listed []Item
+	for _, rec := range all {
+		if !containsID(p.order, model.RowOf(rec).ID) {
+			fresh = append(fresh, itemOf(rec))
+		}
+	}
+	for _, id := range p.order {
+		if rec, ok := p.lister.Records().Get(p.record.ModelName(), id); ok {
+			listed = append(listed, itemOf(rec))
+		}
+	}
+	return append(fresh, listed...)
 }
+
+func (p *core) OnChange(fn func()) { p.lister.Records().OnChange(p.record.ModelName(), fn) }
 
 func (p *core) Selected() string {
 	return p.selected
@@ -73,47 +80,17 @@ func (p *core) Reload(done func(error)) {
 			done(err)
 			return
 		}
-
-		p.items = p.items[:0]
-		p.index = make([]indexEntry, 0, len(rows))
+		p.order = p.order[:0]
 		for _, row := range rows {
-			iz, ok := row.(Itemizer)
-			if !ok {
-				done(fmt.Err("view: Reload: row type", rowName(row), "does not implement", typeName("view.Itemizer")))
-				return
-			}
-			it := iz.Item()
-			p.items = append(p.items, it)
-			p.index = append(p.index, indexEntry{id: it.ID, rec: row})
+			p.order = append(p.order, model.RowOf(row).ID)
 		}
-
+		p.lister.Records().Put(rows...)
 		done(nil)
 	})
 }
 
-// rowName names the row that failed an Itemizer/model.Model assertion in Reload,
-// so the error points at the offending record. webtyp/fmt has no reflect-based
-// type-name formatter (WASM-size discipline), so this uses model.ModuleNaming —
-// the stable name ormc already generates for every domain record — when the row
-// provides it.
-func rowName(row model.Fielder) string {
-	if mn, ok := row.(model.ModuleNaming); ok {
-		return mn.ModelName()
-	}
-	return "<unnamed type>"
-}
-
-// lookup finds the record for id. Linear, and that is fine: a projected list
-// holds tens to low hundreds of rows, so the scan costs microseconds — the map
-// was never buying anything measurable, and it cost binary size on every page
-// load.
 func (c *core) lookup(id string) (model.Model, bool) {
-	for _, entry := range c.index {
-		if entry.id == id {
-			return entry.rec, true
-		}
-	}
-	return nil, false
+	return c.lister.Records().Get(c.record.ModelName(), id)
 }
 
 func (p *core) Select(id string) model.Model {
@@ -130,13 +107,14 @@ func (p *core) Deselect() {
 }
 
 func (p *core) Filter(term string) []Item {
+	items := p.Items()
 	if term == "" {
-		res := make([]Item, len(p.items))
-		copy(res, p.items)
+		res := make([]Item, len(items))
+		copy(res, items)
 		return res
 	}
 	var filtered []Item
-	for _, it := range p.items {
+	for _, it := range items {
 		if fmt.Matches(it.Label, term) || fmt.Matches(it.Description, term) {
 			filtered = append(filtered, it)
 		}
@@ -224,9 +202,11 @@ func (c *core) Run(op string, done func(error)) {
 
 	var args model.Encodable
 	if action.Args != nil {
-		records := make([]model.Model, 0, len(c.index))
-		for _, entry := range c.index {
-			records = append(records, entry.rec)
+		records := make([]model.Model, 0, len(c.order))
+		for _, id := range c.order {
+			if rec, ok := c.lookup(id); ok {
+				records = append(records, rec)
+			}
 		}
 		args = action.Args(records)
 	}
@@ -327,6 +307,10 @@ func (ud *updatableDeletable) Delete(ids []string, done func(error)) {
 
 type crud struct {
 	*core
+}
+
+func (c *crud) OnChange(fn func()) {
+	c.core.OnChange(fn)
 }
 
 func (c *crud) Save(recs []model.Model, done func(error)) {

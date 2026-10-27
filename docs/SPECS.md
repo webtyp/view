@@ -33,7 +33,7 @@ import (
 //     text is the Presenter's Description() (view.WithDescription), never a
 //     second copy here.
 //   - component leaf: ID, Label, Icon, Permission, Component and Help are required;
-//     no Presenter and no Lookups. For a screen that is not a list.
+//     no Presenter. For a screen that is not a list.
 //   - group: ID, Label, Icon, Help and Children are required; it has no
 //     Presenter, Component or Permission of its own — the menu shows it only when
 //     the user may see at least one child, and opening it opens the first one.
@@ -43,15 +43,7 @@ type Item struct {
 	ID          string // selection key
 	Label       string // primary text
 	Description string // secondary text
-	LeadTop     string // optional three-line badge, leading slot
-	LeadMain    string
-	LeadBottom  string
-}
-
-// Itemizer is implemented by a domain record that knows how to project itself
-// as a list row. It is the ONLY view-specific code a module writes.
-type Itemizer interface {
-	Item() Item
+	Badge       string // the leading badge (model.RowBadge field), e.g. a date or an hour; "" = none
 }
 
 // Lister is what a view needs from the application: the records to show.
@@ -89,6 +81,8 @@ type Presenter interface {
 	Selected() string
 	Select(id string) model.Model
 	Deselect()
+
+	OnChange(fn func())
 }
 
 // Capabilities, discovered by type assertion. A Presenter carries a method
@@ -151,14 +145,8 @@ Applies to `List`, `Save`, `Update`, `Delete` and `Reload` alike.
 
 - Normalizes `done` (§2.3), then calls `p.lister.List(cb)`.
 - Inside `cb`:
-  - `err != nil` → `done(err)`; `items`/`index` are left unchanged.
-  - otherwise resets `items = items[:0]` and rebuilds `index` from the rows,
-    appending one `Item` and one `indexEntry{id, rec}` per row.
-- A row that does not implement `view.Itemizer` aborts the projection with
-  `view: Reload: row type <name> does not implement view.Itemizer`, where
-  `<name>` is `model.ModuleNaming.ModelName()` when the row provides it and
-  `<unnamed type>` otherwise. Rows projected before the offending row stay in
-  `items` (partial projection), matching the pre-callback behaviour.
+  - `err != nil` → `done(err)`; the current `order` is left unchanged.
+  - otherwise resets `order` and records the ID of each row, inserting them into `view.Records`.
 - On success `done(nil)`.
 - `Items()` returns the projected list; before the first successful Reload it
   is empty.
@@ -219,7 +207,6 @@ Compared word for word by tests. Do not reword.
 | `Delete(ids, done)` | `len(ids) == 0` | `view: Delete requires at least one id` |
 | `Delete(ids, done)` | any id not in the index | `view: Delete: unknown id "<id>"` — **nothing is sent** |
 | `Delete(ids, done)` | lister is not a `view.Deleter` | `view: Delete: lister does not implement view.Deleter` |
-| `Reload(done)` | a row is not a `view.Itemizer` | `view: Reload: row type <name> does not implement view.Itemizer` |
 | `list(done)` (callerLister) | a row is not a `model.Model` | `view: Reload: row type <name> does not implement model.Model` |
 | `list(done)` (callerLister) | `newList()` is not a `model.Decodable` | `view: list returned by newList does not implement model.Decodable` |
 

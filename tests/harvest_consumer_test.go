@@ -40,7 +40,8 @@ func TestQualifiedNameMatchesHarvestOps(t *testing.T) {
 	// Client side: view.Ops built from the SAME ModelName() and the SAME
 	// bare op name — no qualified literal typed anywhere in this test.
 	caller := &recordCaller{}
-	view.NewCallerLister(caller,
+	recordsCaller := view.NewRecords().Caller(caller)
+	view.NewCallerLister(recordsCaller,
 		view.Ops{Module: mod.ModelName(), List: "list"},
 		newMockList,
 	).List(func([]model.Model, error) {})

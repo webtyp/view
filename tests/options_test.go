@@ -8,13 +8,31 @@ import (
 	"webtyp.com/view"
 )
 
-type plainLister struct{}
+type plainLister struct{
+	records *view.Records
+}
+
+func (l *plainLister) Records() *view.Records {
+	if l.records == nil {
+		l.records = view.NewRecords()
+	}
+	return l.records
+}
 
 func (l *plainLister) List(done func([]model.Model, error)) {
 	done(nil, nil)
 }
 
-type crudLister struct{}
+type crudLister struct{
+	records *view.Records
+}
+
+func (l *crudLister) Records() *view.Records {
+	if l.records == nil {
+		l.records = view.NewRecords()
+	}
+	return l.records
+}
 
 func (l *crudLister) List(done func([]model.Model, error)) {
 	done(nil, nil)

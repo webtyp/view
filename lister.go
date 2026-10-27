@@ -14,7 +14,7 @@ import "webtyp.com/model"
 // misspelled.
 type Lister interface {
 	// List asks for every record, newest-first or in whatever order the
-	// application considers natural. view projects them through Itemizer.
+	// application considers natural. view projects them through model.RowOf.
 	//
 	// The result arrives asynchronously through done, which is always non-nil:
 	// List must NOT block waiting for the records, and must never assume the
@@ -22,6 +22,11 @@ type Lister interface {
 	// rows or the error — for a transport that is the callback of the
 	// underlying call, for an in-process store it may be immediate.
 	List(done func(rows []model.Model, err error))
+
+	// Records is the page's shared copy this lister's rows live in. A lister puts
+	// the record a Save answered with and removes deleted ids itself (Stage 3);
+	// view puts the rows of List.
+	Records() *Records
 }
 
 // --- The capability-wrapper pattern -----------------------------------------
