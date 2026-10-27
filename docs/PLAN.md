@@ -3,6 +3,8 @@ PLAN: "feat!: one shared copy of each record (view.Records); rows from model.Row
 TAG: v0.6.47
 EXECUTOR: jules
 REVIEWER: none
+STATUS: running
+SESSION: 13760651529966002640
 ---
 
 > Read AGENTS.md at the repo root before any change.
