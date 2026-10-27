@@ -4,9 +4,14 @@ import (
 	"strings"
 	"testing"
 
+	"webtyp.com/dom"
 	"webtyp.com/view"
 	"webtyp.com/view/conformance"
 )
+
+type fakeComponent struct{ dom.Element }
+
+func comp() dom.Component { return &fakeComponent{} }
 
 func leafPresenter() view.Presenter {
 	return view.New(&conformance.FakeLister{}, &conformance.MockRecord{})
@@ -30,6 +35,31 @@ func TestScreen_ValidGroupAndLeaves(t *testing.T) {
 	}
 }
 
+func TestScreen_ValidComponentLeaf(t *testing.T) {
+	leaf := view.Screen{
+		ID:         "booking",
+		Label:      "Booking",
+		Icon:       "booking",
+		Permission: "reservation",
+		Help:       "Book an appointment.",
+		Component:  comp(),
+	}
+	if err := leaf.Validate(); err != nil {
+		t.Fatalf("valid component leaf rejected: %v", err)
+	}
+
+	group := view.Screen{
+		ID:       "g",
+		Label:    "G",
+		Icon:     "g",
+		Help:     "h",
+		Children: []view.Screen{leaf},
+	}
+	if err := group.Validate(); err != nil {
+		t.Fatalf("valid group containing component leaf rejected: %v", err)
+	}
+}
+
 func TestScreen_InvalidShapesNameTheScreen(t *testing.T) {
 	noPermission := leaf("x")
 	noPermission.Permission = ""
@@ -41,6 +71,13 @@ func TestScreen_InvalidShapesNameTheScreen(t *testing.T) {
 	groupNoHelp := view.Screen{ID: "g", Label: "G", Icon: "g", Children: []view.Screen{leaf("x")}}
 	badChild := view.Screen{ID: "g", Label: "G", Icon: "g", Help: "h", Children: []view.Screen{noPermission}}
 
+	compBoth := leaf("x")
+	compBoth.Component = comp()
+	compNoHelp := view.Screen{ID: "x", Label: "X", Icon: "x", Permission: "p", Component: comp()}
+	compLookups := view.Screen{ID: "x", Label: "X", Icon: "x", Permission: "p", Component: comp(), Help: "h", Lookups: []view.Lookup{{Field: "y", Source: leafPresenter()}}}
+	compNoPermission := view.Screen{ID: "x", Label: "X", Icon: "x", Component: comp(), Help: "h"}
+	groupWithComponent := view.Screen{ID: "g", Label: "G", Icon: "g", Help: "h", Component: comp(), Children: []view.Screen{leaf("x")}}
+
 	cases := []struct {
 		name   string
 		screen view.Screen
@@ -49,11 +86,16 @@ func TestScreen_InvalidShapesNameTheScreen(t *testing.T) {
 		{"no id", view.Screen{}, "no ID"},
 		{"no label", view.Screen{ID: "x"}, "no Label: x"},
 		{"no icon", view.Screen{ID: "x", Label: "X"}, "no Icon: x"},
-		{"leaf without presenter", view.Screen{ID: "x", Label: "X", Icon: "x"}, "needs a Presenter: x"},
+		{"leaf without presenter", view.Screen{ID: "x", Label: "X", Icon: "x"}, "needs a Presenter or a Component: x"},
+		{"both", compBoth, "both a Presenter and a Component: x"},
+		{"component without help", compNoHelp, "with a Component needs Help: x"},
+		{"component with lookups", compLookups, "with a Component cannot have Lookups: x"},
+		{"component without permission", compNoPermission, "needs a Permission: x"},
 		{"leaf without permission", noPermission, "needs a Permission: x"},
 		{"leaf with Help", leafWithHelp, "not Help: x"},
 		{"incomplete lookup", badLookup, "lookup needs Field and Source: x"},
-		{"group with presenter", groupWithPresenter, "cannot have a Presenter, Permission or Lookups: g"},
+		{"group with presenter", groupWithPresenter, "cannot have a Presenter, Component, Permission or Lookups: g"},
+		{"group with component", groupWithComponent, "cannot have a Presenter, Component, Permission or Lookups: g"},
 		{"group without help", groupNoHelp, "needs Help: g"},
 		{"invalid child", badChild, "needs a Permission: x"},
 	}
