@@ -3,6 +3,8 @@ PLAN: "feat: view.Screen.Component — a screen that is not a list, in the same 
 TAG: v0.6.46
 EXECUTOR: jules
 REVIEWER: none
+STATUS: running
+SESSION: 7046896019275979829
 ---
 
 > Read AGENTS.md at the repo root before any change.
