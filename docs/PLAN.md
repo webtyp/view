@@ -3,8 +3,10 @@ PLAN: "feat!: one shared copy of each record (view.Records); rows from model.Row
 TAG: v0.6.47
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 13760651529966002640
+PR: https://github.com/webtyp/view/pull/10
+REVIEWED_COMMIT: 13e85c20c27a7d203bdc057a6eadfd110f941b6c
 ---
 
 > Read AGENTS.md at the repo root before any change.
