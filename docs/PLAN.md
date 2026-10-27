@@ -3,8 +3,10 @@ PLAN: "feat: view.Screen.Component — a screen that is not a list, in the same 
 TAG: v0.6.46
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 7046896019275979829
+PR: https://github.com/webtyp/view/pull/9
+REVIEWED_COMMIT: 539095db2c84a45a5dbaa5b50f396c9afeda220e
 ---
 
 > Read AGENTS.md at the repo root before any change.
