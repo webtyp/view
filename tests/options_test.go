@@ -19,7 +19,7 @@ func (l *plainLister) Records() *view.Records {
 	return l.records
 }
 
-func (l *plainLister) List(done func([]model.Model, error)) {
+func (l *plainLister) List(done func([]view.Record, error)) {
 	done(nil, nil)
 }
 
@@ -34,7 +34,7 @@ func (l *crudLister) Records() *view.Records {
 	return l.records
 }
 
-func (l *crudLister) List(done func([]model.Model, error)) {
+func (l *crudLister) List(done func([]view.Record, error)) {
 	done(nil, nil)
 }
 
@@ -57,7 +57,7 @@ func (r *dummyRecordForOptions) Schema() []model.Field             { return nil 
 func (r *dummyRecordForOptions) Pointers() []any                   { return nil }
 func (r *dummyRecordForOptions) EncodeFields(w model.FieldWriter)  {}
 func (r *dummyRecordForOptions) DecodeFields(r2 model.FieldReader) {}
-func (r *dummyRecordForOptions) Item() view.Item                   { return view.Item{} }
+func (r *dummyRecordForOptions) Item() model.Item                  { return model.Item{} }
 func (r *dummyRecordForOptions) IsNil() bool                       { return r == nil }
 func (r *dummyRecordForOptions) ModelName() string                 { return "dummy" }
 

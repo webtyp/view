@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"webtyp.com/mcp"
-	"webtyp.com/model"
 	"webtyp.com/router"
 	"webtyp.com/view"
 )
@@ -44,7 +43,7 @@ func TestQualifiedNameMatchesHarvestOps(t *testing.T) {
 	view.NewCallerLister(recordsCaller,
 		view.Ops{Module: mod.ModelName(), List: "list"},
 		newMockList,
-	).List(func([]model.Model, error) {})
+	).List(func([]view.Record, error) {})
 
 	if len(caller.calls) != 1 {
 		t.Fatalf("expected 1 call, got %d", len(caller.calls))

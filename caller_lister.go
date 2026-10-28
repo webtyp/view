@@ -145,7 +145,12 @@ func (b *callerLister) RunAction(op string, args model.Encodable, done func(erro
 	done(errUnknownAction(op))
 }
 
-func (b *callerLister) list(done func([]model.Model, error)) {
+var (
+	opReloadPrefix     = "view: Reload:"
+	opSaveListerPrefix = "view: Save:"
+)
+
+func (b *callerLister) list(done func([]Record, error)) {
 	list := b.newList()
 	dec, ok := list.(model.Decodable)
 	if !ok {
@@ -157,24 +162,24 @@ func (b *callerLister) list(done func([]model.Model, error)) {
 			done(nil, err)
 			return
 		}
-		rows := make([]model.Model, 0, list.Len())
+		rows := make([]Record, 0, list.Len())
 		for i := 0; i < list.Len(); i++ {
-			row := list.At(i)
-			m, ok := row.(model.Model)
+			rec, ok := list.At(i).(Record)
 			if !ok {
-				done(nil, fmt.Err("view: Reload: row type", "<unnamed type>", "does not implement", typeName("model.Model")))
+				done(nil, fmt.Err(opReloadPrefix, "row type", rowName(list.At(i)), "has no Item(): mark its fields with Item: model.ItemLabel and run ormc"))
 				return
 			}
-			rows = append(rows, m)
+			rows = append(rows, rec)
 		}
 		done(rows, nil)
 	})
 }
 
 func (b *callerLister) save(recs []model.Model, done func(error)) {
-	saved, ok := b.newList().Append().(model.Model)
+	raw := b.newList().Append()
+	saved, ok := raw.(Record)
 	if !ok {
-		done(fmt.Err("view: list returned by newList", "does not implement", typeName("model.Model")))
+		done(fmt.Err(opSaveListerPrefix, "row type", rowName(raw), "has no Item(): mark its fields with Item: model.ItemLabel and run ormc"))
 		return
 	}
 	b.caller.Call(b.ops.Save, &saveArgs{recs: recs}, saved, func(err error) {
@@ -183,6 +188,13 @@ func (b *callerLister) save(recs []model.Model, done func(error)) {
 		}
 		done(err)
 	})
+}
+
+func rowName(v any) string {
+	if m, ok := v.(model.Model); ok {
+		return m.ModelName()
+	}
+	return "<unnamed type>"
 }
 
 func (b *callerLister) update(ids []string, rec model.Model, fields []string, done func(error)) {
@@ -216,7 +228,7 @@ type callerList struct {
 	*callerLister
 }
 
-func (b *callerList) List(done func([]model.Model, error)) {
+func (b *callerList) List(done func([]Record, error)) {
 	b.list(done)
 }
 
@@ -224,7 +236,7 @@ type callerSave struct {
 	*callerLister
 }
 
-func (b *callerSave) List(done func([]model.Model, error)) {
+func (b *callerSave) List(done func([]Record, error)) {
 	b.list(done)
 }
 
@@ -236,7 +248,7 @@ type callerUpdate struct {
 	*callerLister
 }
 
-func (b *callerUpdate) List(done func([]model.Model, error)) {
+func (b *callerUpdate) List(done func([]Record, error)) {
 	b.list(done)
 }
 
@@ -248,7 +260,7 @@ type callerDelete struct {
 	*callerLister
 }
 
-func (b *callerDelete) List(done func([]model.Model, error)) {
+func (b *callerDelete) List(done func([]Record, error)) {
 	b.list(done)
 }
 
@@ -260,7 +272,7 @@ type callerSaveUpdate struct {
 	*callerLister
 }
 
-func (b *callerSaveUpdate) List(done func([]model.Model, error)) {
+func (b *callerSaveUpdate) List(done func([]Record, error)) {
 	b.list(done)
 }
 
@@ -276,7 +288,7 @@ type callerSaveDelete struct {
 	*callerLister
 }
 
-func (b *callerSaveDelete) List(done func([]model.Model, error)) {
+func (b *callerSaveDelete) List(done func([]Record, error)) {
 	b.list(done)
 }
 
@@ -292,7 +304,7 @@ type callerUpdateDelete struct {
 	*callerLister
 }
 
-func (b *callerUpdateDelete) List(done func([]model.Model, error)) {
+func (b *callerUpdateDelete) List(done func([]Record, error)) {
 	b.list(done)
 }
 
@@ -308,7 +320,7 @@ type callerCRUD struct {
 	*callerLister
 }
 
-func (b *callerCRUD) List(done func([]model.Model, error)) {
+func (b *callerCRUD) List(done func([]Record, error)) {
 	b.list(done)
 }
 

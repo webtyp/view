@@ -38,7 +38,7 @@ func TestActions(t *testing.T) {
 
 	t.Run("with a fake ActionRunner, Run passes Args built from Reload in order", func(t *testing.T) {
 		fb := &conformance.FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&conformance.MockRecord{ID: "1", Name: "Alice"},
 				&conformance.MockRecord{ID: "2", Name: "Bob"},
 			},

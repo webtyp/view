@@ -1,7 +1,5 @@
 package view
 
-import "webtyp.com/model"
-
 // Lister is what a view needs from the application: the records to show.
 // Mandatory — a view with nothing to list is not a view.
 //
@@ -14,14 +12,14 @@ import "webtyp.com/model"
 // misspelled.
 type Lister interface {
 	// List asks for every record, newest-first or in whatever order the
-	// application considers natural. view projects them through model.RowOf.
+	// application considers natural. view computes their items once on Put.
 	//
 	// The result arrives asynchronously through done, which is always non-nil:
 	// List must NOT block waiting for the records, and must never assume the
 	// caller has them when it returns. Call done exactly once with either the
 	// rows or the error — for a transport that is the callback of the
 	// underlying call, for an in-process store it may be immediate.
-	List(done func(rows []model.Model, err error))
+	List(done func(rows []Record, err error))
 
 	// Records is the page's shared copy this lister's rows live in. A lister puts
 	// the record a Save answered with and removes deleted ids itself (Stage 3);

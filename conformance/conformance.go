@@ -14,7 +14,7 @@ import (
 // it carries every capability; capability-absence clauses below use the
 // purpose-built minimal doubles instead.
 type FakeLister struct {
-	Rows []model.Model // what List returns
+	Rows []view.Record // what List returns
 
 	Calls         int
 	SavedRecords  []model.Model
@@ -49,13 +49,13 @@ func (b *FakeLister) RunAction(op string, args model.Encodable, done func(error)
 	done(nil)
 }
 
-func (b *FakeLister) List(done func([]model.Model, error)) {
+func (b *FakeLister) List(done func([]view.Record, error)) {
 	b.Calls++
 	if b.Err != nil {
 		done(nil, b.Err)
 		return
 	}
-	out := make([]model.Model, len(b.Rows))
+	out := make([]view.Record, len(b.Rows))
 	copy(out, b.Rows)
 	done(out, nil)
 }
@@ -66,7 +66,11 @@ func (b *FakeLister) Save(recs []model.Model, done func(error)) {
 		return
 	}
 	b.SavedRecords = append(b.SavedRecords, recs...)
-	b.Records().Put(recs...)
+	for _, rec := range recs {
+		if r, ok := rec.(view.Record); ok {
+			b.Records().Put(r)
+		}
+	}
 	done(nil)
 }
 
@@ -101,7 +105,7 @@ var (
 // listOnlyLister implements List and nothing else: the double for the
 // negative capability clauses below.
 type listOnlyLister struct {
-	rows    []model.Model
+	rows    []view.Record
 	records *view.Records
 }
 
@@ -112,8 +116,8 @@ func (b *listOnlyLister) Records() *view.Records {
 	return b.records
 }
 
-func (b *listOnlyLister) List(done func([]model.Model, error)) {
-	out := make([]model.Model, len(b.rows))
+func (b *listOnlyLister) List(done func([]view.Record, error)) {
+	out := make([]view.Record, len(b.rows))
 	copy(out, b.rows)
 	done(out, nil)
 }
@@ -122,7 +126,7 @@ func (b *listOnlyLister) List(done func([]model.Model, error)) {
 // rule (a backend with Save yields a Presenter that IS a Saver and is NOT an
 // Updater/Deleter).
 type listSaveLister struct {
-	rows    []model.Model
+	rows    []view.Record
 	saved   []model.Model
 	records *view.Records
 }
@@ -134,8 +138,8 @@ func (b *listSaveLister) Records() *view.Records {
 	return b.records
 }
 
-func (b *listSaveLister) List(done func([]model.Model, error)) {
-	out := make([]model.Model, len(b.rows))
+func (b *listSaveLister) List(done func([]view.Record, error)) {
+	out := make([]view.Record, len(b.rows))
 	copy(out, b.rows)
 	done(out, nil)
 }
@@ -151,8 +155,8 @@ func (b *listSaveLister) Save(recs []model.Model, done func(error)) {
 // releases done manually and asserts the projection only then, so any renderer
 // that assumes the rows exist when List returns fails here.
 type deferredLister struct {
-	rows    []model.Model
-	done    func([]model.Model, error)
+	rows    []view.Record
+	done    func([]view.Record, error)
 	records *view.Records
 }
 
@@ -163,7 +167,7 @@ func (b *deferredLister) Records() *view.Records {
 	return b.records
 }
 
-func (b *deferredLister) List(done func([]model.Model, error)) {
+func (b *deferredLister) List(done func([]view.Record, error)) {
 	b.done = done
 }
 
@@ -210,6 +214,12 @@ type MockRecord struct {
 	Name string
 }
 
+func (m *MockRecord) Item() model.Item {
+	return model.Item{ID: m.ID, Label: m.Name}
+}
+
+var _ view.Record = (*MockRecord)(nil)
+
 // ModelName implements model.ModuleNaming.
 func (m *MockRecord) ModelName() string { return "MockRecord" }
 
@@ -224,7 +234,7 @@ func (m *MockRecord) Schema() []model.Field {
 		// visible, loads through the form inputs and hides every hidden-PK
 		// defect (see app-demo PLAN §2bis).
 		{Name: "id", Type: input.Text(), NotNull: true, DB: &model.FieldDB{PK: true}},
-		{Name: "name", Type: input.Text(), Row: model.RowTitle},
+		{Name: "name", Type: input.Text()},
 	}
 }
 
@@ -298,7 +308,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("actions_disabled_without_items", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{},
+			Rows: []view.Record{},
 			ActionList: []view.Action{
 				{Op: "a", Label: "Action A"},
 			},
@@ -314,7 +324,7 @@ func Run(t *testing.T, f Factory) {
 		}
 
 		// Now load some items
-		fb.Rows = []model.Model{&MockRecord{ID: "1", Name: "Alice"}}
+		fb.Rows = []view.Record{&MockRecord{ID: "1", Name: "Alice"}}
 		p.Reload(nil)
 
 		if !driver.ActionEnabled("a") {
@@ -324,7 +334,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("action_without_confirm_runs_on_click", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{&MockRecord{ID: "1", Name: "Alice"}},
+			Rows: []view.Record{&MockRecord{ID: "1", Name: "Alice"}},
 			ActionList: []view.Action{
 				{Op: "a", Label: "Action A"},
 			},
@@ -344,7 +354,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("action_with_confirm_waits", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{&MockRecord{ID: "1", Name: "Alice"}},
+			Rows: []view.Record{&MockRecord{ID: "1", Name: "Alice"}},
 			ActionList: []view.Action{
 				{Op: "a", Label: "Action A", Confirm: "Are you sure?"},
 			},
@@ -395,7 +405,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("list_renders_item_labels", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 				&MockRecord{ID: "2", Name: "Bob"},
 			},
@@ -414,7 +424,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("select_fills_form", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 				&MockRecord{ID: "2", Name: "Bob"},
 			},
@@ -489,7 +499,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("edit_after_create_keeps_selected_id", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 				&MockRecord{ID: "2", Name: "Bob"},
 			},
@@ -520,7 +530,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("first_edit_after_mount_keeps_selected_id", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 				&MockRecord{ID: "2", Name: "Bob"},
 			},
@@ -578,7 +588,7 @@ func Run(t *testing.T, f Factory) {
 	// compares its form map against a baseline snapshotted on Select/Deselect.
 	t.Run("unchanged_save_does_not_ship", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 			},
 		}
@@ -597,7 +607,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("revert_edit_is_not_dirty", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 			},
 		}
@@ -618,7 +628,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("delete_ships_selected_record", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 				&MockRecord{ID: "2", Name: "Bob"},
 			},
@@ -650,7 +660,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("deselect_clears_selection", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 			},
 		}
@@ -671,7 +681,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("select_unknown_id_returns_nil", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 			},
 		}
@@ -695,7 +705,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("filter_matches_label", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 				&MockRecord{ID: "2", Name: "Bob"},
 			},
@@ -759,7 +769,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("edit_focuses_first_field", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 			},
 		}
@@ -839,7 +849,7 @@ func Run(t *testing.T, f Factory) {
 
 	t.Run("plural_save_delete_and_update", func(t *testing.T) {
 		fb := &FakeLister{
-			Rows: []model.Model{
+			Rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 				&MockRecord{ID: "2", Name: "Bob"},
 			},
@@ -897,7 +907,7 @@ func Run(t *testing.T, f Factory) {
 	// an empty list here — and this clause would catch it.
 	t.Run("no_blocking_in_list", func(t *testing.T) {
 		dl := &deferredLister{
-			rows: []model.Model{
+			rows: []view.Record{
 				&MockRecord{ID: "1", Name: "Alice"},
 				&MockRecord{ID: "2", Name: "Bob"},
 			},

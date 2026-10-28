@@ -38,17 +38,16 @@ import (
 //     Presenter, Component or Permission of its own — the menu shows it only when
 //     the user may see at least one child, and opening it opens the first one.
 
-// Item is ONE projected row of the list.
-type Item struct {
-	ID          string // selection key
-	Label       string // primary text
-	Description string // secondary text
-	Badge       string // the leading badge (model.RowBadge field), e.g. a date or an hour; "" = none
+// Record is a record a list can show: a model whose Item() ormc generates from the
+// fields marked Item:… (model.ItemLabel, …).
+type Record interface {
+	model.Model
+	model.Itemizer
 }
 
 // Lister is what a view needs from the application: the records to show.
 type Lister interface {
-	List(done func(rows []model.Model, err error))
+	List(done func(rows []Record, err error))
 }
 
 type Action struct {
@@ -72,14 +71,14 @@ type ActionRunner interface {
 type Presenter interface {
 	Title() string
 	SearchPlaceholder() string
-	Record() model.Model
+	Record() Record
 
-	Items() []Item
-	Filter(term string) []Item
+	Items() []model.Item
+	Filter(term string) []model.Item
 	Reload(done func(error))
 
 	Selected() string
-	Select(id string) model.Model
+	Select(id string) Record
 	Deselect()
 
 	OnChange(fn func())
@@ -151,7 +150,7 @@ Applies to `List`, `Save`, `Update`, `Delete` and `Reload` alike.
 - `Items()` returns the projected list; before the first successful Reload it
   is empty.
 
-### 3.2 `Filter(term string) []Item`
+### 3.2 `Filter(term string) []model.Item`
 
 - `term == ""` → a **copy** of all items (the caller may mutate it freely).
 - Otherwise the items whose `Label` or `Description` matches `term` with

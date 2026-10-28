@@ -5,19 +5,12 @@ import (
 	"webtyp.com/model"
 )
 
-// Item is ONE projected row of the list — the neutral form any renderer can draw.
-// No markup: only what a list needs to display and let the user pick a record.
-type Item struct {
-	ID          string // selection key
-	Label       string // primary text
-	Description string // secondary text (a SKU, an IP, a subtitle)
-	Badge       string // the leading badge (model.RowBadge field), e.g. a date or an hour; "" = none
-}
-
-// itemOf projects a record as a list row from its fields (model.RowOf).
-func itemOf(rec model.Model) Item {
-	r := model.RowOf(rec)
-	return Item{ID: r.ID, Label: r.Title, Description: r.Detail, Badge: r.Badge}
+// Record is a record a list can show: a model whose Item() ormc generates from the
+// fields marked Item:… (model.ItemLabel, …). A model without marks has no Item()
+// and cannot be listed — the compiler says so.
+type Record interface {
+	model.Model
+	model.Itemizer
 }
 
 // Presenter is the UI-agnostic core behind any CRUD view: list, select, reload.
@@ -31,10 +24,10 @@ type Presenter interface {
 
 	// EmptyMessage is what to show, and what to do, when Items() is empty. "" when WithEmpty was not used.
 	EmptyMessage() lang.Text
-	Record() model.Model
+	Record() Record
 
-	Items() []Item             // the rows of this presenter's model, newest first
-	Filter(term string) []Item // local case-insensitive match over Label+Description; "" returns all
+	Items() []model.Item             // the rows of this presenter's model, newest first
+	Filter(term string) []model.Item // local case-insensitive match over Label+Description; "" returns all
 
 	// Reload asks the Lister for the records, then projects and indexes them.
 	// The result is asynchronous: done runs once, after List delivers, and the
@@ -42,9 +35,9 @@ type Presenter interface {
 	// if the caller passes nil.
 	Reload(done func(error))
 
-	Selected() string             // currently selected id ("" if none)
-	Select(id string) model.Model // marks id and returns its record from the internal index; unknown id → nil, selection unchanged
-	Deselect()                    // clears the selection
+	Selected() string        // currently selected id ("" if none)
+	Select(id string) Record // marks id and returns its record from the internal index; unknown id → nil, selection unchanged
+	Deselect()               // clears the selection
 
 	// OnChange registers fn to run after any record of this presenter's model
 	// changes in the shared Records (a save from any screen, a sync). A renderer
@@ -148,7 +141,7 @@ func WithEmpty(msg lang.Text) Option {
 // a capability the lister does not have.
 func New(
 	l Lister,
-	record model.Model,
+	record Record,
 	opts ...Option,
 ) Presenter {
 	if l == nil {

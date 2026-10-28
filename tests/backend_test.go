@@ -23,8 +23,8 @@ func (s *memStore) Records() *view.Records {
 	return s.records
 }
 
-func (s *memStore) List(done func([]model.Model, error)) {
-	out := make([]model.Model, 0, len(s.rows))
+func (s *memStore) List(done func([]view.Record, error)) {
+	out := make([]view.Record, 0, len(s.rows))
 	for _, r := range s.rows {
 		out = append(out, r)
 	}
@@ -44,8 +44,10 @@ func (s *memStore) Save(recs []model.Model, done func(error)) {
 		if !replaced {
 			s.rows = append(s.rows, rec)
 		}
+		if r, ok := m.(view.Record); ok {
+			s.Records().Put(r)
+		}
 	}
-	s.Records().Put(recs...)
 	done(nil)
 }
 

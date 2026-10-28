@@ -17,7 +17,7 @@ var (
 
 type core struct {
 	lister            Lister
-	record            model.Model
+	record            Record
 	title             string
 	searchPlaceholder lang.Text
 	description       lang.Text
@@ -43,23 +43,26 @@ func (p *core) EmptyMessage() lang.Text {
 	return p.emptyMessage
 }
 
-func (p *core) Record() model.Model {
+func (p *core) Record() Record {
 	return p.record
 }
 
 // Items: the rows of this model in the shared copy — those this presenter never
 // listed (saved here or elsewhere, synced) first, then the listed ones in List order.
-func (p *core) Items() []Item {
-	all := p.lister.Records().All(p.record.ModelName())
-	var fresh, listed []Item
-	for _, rec := range all {
-		if !containsID(p.order, model.RowOf(rec).ID) {
-			fresh = append(fresh, itemOf(rec))
+func (p *core) Items() []model.Item {
+	entries := p.lister.Records().items(p.record.ModelName())
+	var fresh, listed []model.Item
+	for _, e := range entries {
+		if !containsID(p.order, e.item.ID) {
+			fresh = append(fresh, e.item)
 		}
 	}
 	for _, id := range p.order {
-		if rec, ok := p.lister.Records().Get(p.record.ModelName(), id); ok {
-			listed = append(listed, itemOf(rec))
+		for _, e := range entries {
+			if e.item.ID == id {
+				listed = append(listed, e.item)
+				break
+			}
 		}
 	}
 	return append(fresh, listed...)
@@ -75,25 +78,25 @@ func (p *core) Reload(done func(error)) {
 	if done == nil {
 		done = func(error) {}
 	}
-	p.lister.List(func(rows []model.Model, err error) {
+	p.lister.List(func(rows []Record, err error) {
 		if err != nil {
 			done(err)
 			return
 		}
 		p.order = p.order[:0]
 		for _, row := range rows {
-			p.order = append(p.order, model.RowOf(row).ID)
+			p.order = append(p.order, row.Item().ID)
 		}
 		p.lister.Records().Put(rows...)
 		done(nil)
 	})
 }
 
-func (c *core) lookup(id string) (model.Model, bool) {
+func (c *core) lookup(id string) (Record, bool) {
 	return c.lister.Records().Get(c.record.ModelName(), id)
 }
 
-func (p *core) Select(id string) model.Model {
+func (p *core) Select(id string) Record {
 	m, ok := p.lookup(id)
 	if !ok {
 		return nil
@@ -106,14 +109,14 @@ func (p *core) Deselect() {
 	p.selected = ""
 }
 
-func (p *core) Filter(term string) []Item {
+func (p *core) Filter(term string) []model.Item {
 	items := p.Items()
 	if term == "" {
-		res := make([]Item, len(items))
+		res := make([]model.Item, len(items))
 		copy(res, items)
 		return res
 	}
-	var filtered []Item
+	var filtered []model.Item
 	for _, it := range items {
 		if fmt.Matches(it.Label, term) || fmt.Matches(it.Description, term) {
 			filtered = append(filtered, it)

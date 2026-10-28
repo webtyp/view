@@ -189,3 +189,58 @@ func TestCallerLister_SavePutsServerAnswer(t *testing.T) {
 		t.Errorf("expected Server name, got %s", rec.(*conformance.MockRecord).Name)
 	}
 }
+
+type countedRecord struct {
+	id    string
+	calls *int
+}
+
+func (c *countedRecord) ModelName() string                { return "counted" }
+func (c *countedRecord) IsNil() bool                      { return c == nil }
+func (c *countedRecord) Schema() []model.Field            { return nil }
+func (c *countedRecord) Pointers() []any                  { return nil }
+func (c *countedRecord) EncodeFields(w model.FieldWriter) {}
+func (c *countedRecord) DecodeFields(r model.FieldReader) {}
+func (c *countedRecord) Item() model.Item {
+	*c.calls++
+	return model.Item{ID: c.id, Label: c.id}
+}
+
+var _ view.Record = (*countedRecord)(nil)
+
+type countedLister struct {
+	records *view.Records
+}
+
+func (l *countedLister) Records() *view.Records               { return l.records }
+func (l *countedLister) List(done func([]view.Record, error)) { done(nil, nil) }
+
+func TestRecords_ItemComputedOncePerPut(t *testing.T) {
+	calls := 0
+	r := view.NewRecords()
+	r1 := &countedRecord{id: "1", calls: &calls}
+	r2 := &countedRecord{id: "2", calls: &calls}
+	r3 := &countedRecord{id: "3", calls: &calls}
+
+	r.Put(r1, r2, r3)
+	if calls != 3 {
+		t.Fatalf("expected 3 Item() calls after Put, got %d", calls)
+	}
+
+	for i := 0; i < 10; i++ {
+		_, _ = r.Get("counted", "1")
+		_ = r.All("counted")
+	}
+
+	l := &countedLister{records: r}
+	p := view.New(l, &countedRecord{id: "0", calls: &calls})
+	for i := 0; i < 10; i++ {
+		_ = p.Items()
+		_ = p.Filter("")
+		_ = p.Filter("1")
+	}
+
+	if calls != 3 {
+		t.Errorf("Item() was called %d times; expected exactly 3 (once per Put)", calls)
+	}
+}

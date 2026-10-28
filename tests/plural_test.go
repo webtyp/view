@@ -49,10 +49,11 @@ type dummyRecord struct {
 
 func (r *dummyRecord) ModelName() string { return "dummyRecord" }
 func (r *dummyRecord) IsNil() bool       { return r == nil }
+func (r *dummyRecord) Item() model.Item  { return model.Item{ID: r.id, Label: r.name} }
 func (r *dummyRecord) Schema() []model.Field {
 	return []model.Field{
 		{Name: "id", Type: input.Text(), DB: &model.FieldDB{PK: true}},
-		{Name: "name", Type: input.Text(), Row: model.RowTitle},
+		{Name: "name", Type: input.Text()},
 	}
 }
 func (r *dummyRecord) Pointers() []any { return []any{&r.id, &r.name} }
@@ -250,8 +251,8 @@ func TestDeleteShipsEveryIDInOneCall(t *testing.T) {
 // deferredLister captures done and returns without invoking it: the shape of a
 // real transport, whose result arrives in a later turn of the event loop.
 type deferredLister struct {
-	rows    []model.Model
-	done    func([]model.Model, error)
+	rows    []view.Record
+	done    func([]view.Record, error)
 	records *view.Records
 }
 
@@ -262,14 +263,14 @@ func (l *deferredLister) Records() *view.Records {
 	return l.records
 }
 
-func (l *deferredLister) List(done func([]model.Model, error)) { l.done = done }
+func (l *deferredLister) List(done func([]view.Record, error)) { l.done = done }
 
 // TestListDoneRunsLater is the package-level twin of the conformance clause
 // no_blocking_in_list: Reload must project only when List's done finally runs,
 // and Items() must be empty before that.
 func TestListDoneRunsLater(t *testing.T) {
 	dl := &deferredLister{
-		rows: []model.Model{&dummyRecord{id: "1", name: "One"}},
+		rows: []view.Record{&dummyRecord{id: "1", name: "One"}},
 	}
 	p := view.New(dl, &dummyRecord{})
 
