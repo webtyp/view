@@ -244,3 +244,23 @@ func TestRecords_ItemComputedOncePerPut(t *testing.T) {
 		t.Errorf("Item() was called %d times; expected exactly 3 (once per Put)", calls)
 	}
 }
+
+func TestRecords_ConcurrentAccess(t *testing.T) {
+	r := view.NewRecords()
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < 100; i++ {
+			r.Put(&conformance.MockRecord{ID: "concurrent", Name: "Concurrent"})
+		}
+		close(done)
+	}()
+	for {
+		select {
+		case <-done:
+			return
+		default:
+			r.Get("MockRecord", "concurrent")
+			r.All("MockRecord")
+		}
+	}
+}

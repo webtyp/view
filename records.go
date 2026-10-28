@@ -1,6 +1,8 @@
 package view
 
 import (
+	"sync"
+
 	"webtyp.com/model"
 	"webtyp.com/router"
 )
@@ -13,6 +15,7 @@ import (
 //	records := view.NewRecords()
 //	caller := records.Caller(rpc.NewCaller(""))
 type Records struct {
+	mu     sync.RWMutex
 	tables []*recordTable // a slice, not a map: this file compiles to WASM
 }
 
@@ -35,6 +38,7 @@ func (r *Records) Caller(c router.Caller) router.Caller { return &recordsCaller{
 
 // Put inserts or replaces rows by model name and Item().ID, computing each item once.
 func (r *Records) Put(rows ...Record) {
+	r.mu.Lock()
 	var touched []*recordTable
 	for _, row := range rows {
 		t := r.table(row.ModelName())
@@ -52,11 +56,13 @@ func (r *Records) Put(rows ...Record) {
 		}
 		touched = appendTable(touched, t)
 	}
+	r.mu.Unlock()
 	notify(touched)
 }
 
 // Remove drops the rows of modelName with the given ids and tells its subscribers.
 func (r *Records) Remove(modelName string, ids ...string) {
+	r.mu.Lock()
 	t := r.table(modelName)
 	kept := t.entries[:0]
 	for _, cur := range t.entries {
@@ -65,12 +71,19 @@ func (r *Records) Remove(modelName string, ids ...string) {
 		}
 	}
 	t.entries = kept
+	r.mu.Unlock()
 	notify([]*recordTable{t})
 }
 
 // Get returns the record of modelName with id.
 func (r *Records) Get(modelName, id string) (Record, bool) {
-	for _, cur := range r.table(modelName).entries {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	t := r.findTable(modelName)
+	if t == nil {
+		return nil, false
+	}
+	for _, cur := range t.entries {
 		if cur.item.ID == id {
 			return cur.rec, true
 		}
@@ -80,9 +93,14 @@ func (r *Records) Get(modelName, id string) (Record, bool) {
 
 // All returns every record of modelName, in the order they were first put.
 func (r *Records) All(modelName string) []Record {
-	entries := r.table(modelName).entries
-	recs := make([]Record, len(entries))
-	for i, e := range entries {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	t := r.findTable(modelName)
+	if t == nil {
+		return nil
+	}
+	recs := make([]Record, len(t.entries))
+	for i, e := range t.entries {
 		recs[i] = e.rec
 	}
 	return recs
@@ -90,13 +108,32 @@ func (r *Records) All(modelName string) []Record {
 
 // items returns the cached entries of modelName for the presenter.
 func (r *Records) items(modelName string) []recordEntry {
-	return r.table(modelName).entries
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	t := r.findTable(modelName)
+	if t == nil {
+		return nil
+	}
+	out := make([]recordEntry, len(t.entries))
+	copy(out, t.entries)
+	return out
 }
 
 // OnChange registers fn to run after any Put or Remove that touches modelName.
 func (r *Records) OnChange(modelName string, fn func()) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	t := r.table(modelName)
 	t.subs = append(t.subs, fn)
+}
+
+func (r *Records) findTable(name string) *recordTable {
+	for _, t := range r.tables {
+		if t.name == name {
+			return t
+		}
+	}
+	return nil
 }
 
 func (r *Records) table(name string) *recordTable {
