@@ -18,7 +18,6 @@ func (a *saveArgs) EncodeFields(w model.FieldWriter) {
 	for _, r := range a.recs {
 		arr.Object(r)
 	}
-	arr.Close()
 }
 
 // updateArgs is the wire shape of a field patch: which rows, which columns,
@@ -38,12 +37,10 @@ func (a *updateArgs) EncodeFields(w model.FieldWriter) {
 	for _, id := range a.ids {
 		ids.String(id)
 	}
-	ids.Close()
 	fields := w.Array("fields", len(a.fields))
 	for _, f := range a.fields {
 		fields.String(f)
 	}
-	fields.Close()
 	w.Object("record", a.rec)
 }
 
@@ -61,5 +58,4 @@ func (a *deleteArgs) EncodeFields(w model.FieldWriter) {
 	for _, id := range a.ids {
 		ids.String(id)
 	}
-	ids.Close()
 }
