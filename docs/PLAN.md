@@ -2,8 +2,10 @@
 PLAN: "feat: MountSave and MountDelete — the server half of the shapes the screen sends; no module declares {records}/{ids} again"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 3150967760845298565
+PR: https://github.com/webtyp/view/pull/11
+REVIEWED_COMMIT: 1a2ee8a5ca71010b6e521a6f2803208f2e8479bb
 ---
 
 > Read AGENTS.md at the repo root before any change.
