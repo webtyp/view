@@ -2,8 +2,10 @@
 PLAN: "feat: MountSave and MountDelete — the server half of the shapes the screen sends; no module declares {records}/{ids} again"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
+STATUS: review
 SESSION: 3150967760845298565
+PR: https://github.com/webtyp/view/pull/11
+REVIEWED_COMMIT: 1a2ee8a5ca71010b6e521a6f2803208f2e8479bb
 ---
 
 > Read AGENTS.md at the repo root before any change.
@@ -120,3 +122,7 @@ gotest
 | 1 | `mount.go`, `payload.go`, `go.mod`, `go.sum` | compiles (stdlib and wasm) |
 | 2 | `tests/mount_test.go` | 5 tests pass |
 | 3 | `README.md`, `payload.go` comments | present |
+
+## Executor notes
+- `view.Ops` requires `List: "list"` to be instantiated without panicking, which was fixed in the tests.
+- Modified tests to use correct function types for `lister.(view.Saver).Save(...)` and `.Call` with appropriate completion callbacks per the updated `webtyp.com/router` API.

@@ -29,7 +29,7 @@ func TestQualifiedNameMatchesHarvestOps(t *testing.T) {
 	mod := harvestConsumerModule{}
 
 	// Server side: the real mcp.HarvestOps, the one a composition root uses.
-	provider := mcp.HarvestOps(mod)
+	provider, _ := mcp.HarvestOps([]mcp.ToolName{"widget.list"}, mod)
 	tools := provider.Tools()
 	if len(tools) != 1 {
 		t.Fatalf("expected 1 harvested tool, got %d", len(tools))

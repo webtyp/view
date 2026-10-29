@@ -396,3 +396,15 @@ To ensure 100% compatibility with WebAssembly (WASM) and TinyGo targets, standar
 - **`docs/SPECS.md`** — the exact contract: public surface, callback
   semantics, capability mirroring, every error message word for word, the wire
   shapes, and the conformance clause list. Every table is a test assertion.
+
+## Serving a screen
+
+The framework provides endpoints to serve screens via `MountSave` and `MountDelete`. This ensures the module never declares `{records}`/`{ids}`.
+
+```go
+view.MountSave(reg, OpUpsertDevice, func(d *Device) error { return m.SaveDevice(d) }).
+    Requires(ResourceDevice, model.Create|model.Update)
+
+view.MountDelete(reg, OpDeleteDevice, m.DeleteDevices).
+    Requires(ResourceDevice, model.Delete)
+```

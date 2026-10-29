@@ -8,9 +8,10 @@ require (
 	webtyp.com/input v0.0.20
 	webtyp.com/json v0.5.37
 	webtyp.com/lang v0.1.9
-	webtyp.com/mcp v0.2.40
-	webtyp.com/model v0.2.9
-	webtyp.com/router v0.4.2
+	webtyp.com/mcp v0.3.14
+	webtyp.com/model v0.2.10
+	webtyp.com/router v0.4.12
+	webtyp.com/rpc v0.2.7
 )
 
 require (
