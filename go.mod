@@ -9,8 +9,8 @@ require (
 	webtyp.com/json v0.5.37
 	webtyp.com/lang v0.1.9
 	webtyp.com/mcp v0.3.14
-	webtyp.com/model v0.2.10
-	webtyp.com/router v0.4.12
+	webtyp.com/model v0.2.12
+	webtyp.com/router v0.4.15
 	webtyp.com/rpc v0.2.7
 )
 
