@@ -10,7 +10,7 @@ require (
 	webtyp.com/lang v0.1.9
 	webtyp.com/mcp v0.3.14
 	webtyp.com/model v0.2.12
-	webtyp.com/router v0.4.15
+	webtyp.com/router v0.4.16
 	webtyp.com/rpc v0.2.7
 )
 

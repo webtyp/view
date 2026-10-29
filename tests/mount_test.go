@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"strings"
 	"testing"
 
 	"webtyp.com/model"
@@ -60,8 +61,8 @@ func TestMountSave_EmptyIs400(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-	if err.Error() != `{"status":400,"title":"invalid","detail":"view: no records to save"}` && err.Error() != `{"status":400,"title":"invalid","detail":"view: no ids given"}` {
-		t.Fatalf("expected 400 invalid, got %v", err)
+	if model.KindOf(err) != model.ErrorInvalid || !strings.Contains(err.Error(), string(view.ErrNoRecords)) {
+		t.Fatalf("expected invalid %q, got %v", view.ErrNoRecords, err)
 	}
 }
 
@@ -80,8 +81,8 @@ func TestMountSave_ErrorKeepsItsStatus(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-	if err.Error() != `{"status":409,"title":"conflict","detail":"dup"}` {
-		t.Fatalf("expected 409 conflict dup, got %v", err)
+	if model.KindOf(err) != model.ErrorConflict || !strings.Contains(err.Error(), "dup") {
+		t.Fatalf("expected conflict dup, got %v", err)
 	}
 }
 
@@ -117,8 +118,8 @@ func TestMountDelete_EmptyIs400(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-	if err.Error() != `{"status":400,"title":"invalid","detail":"view: no records to save"}` && err.Error() != `{"status":400,"title":"invalid","detail":"view: no ids given"}` {
-		t.Fatalf("expected 400 invalid, got %v", err)
+	if model.KindOf(err) != model.ErrorInvalid || !strings.Contains(err.Error(), string(view.ErrNoIDs)) {
+		t.Fatalf("expected invalid %q, got %v", view.ErrNoIDs, err)
 	}
 }
 
