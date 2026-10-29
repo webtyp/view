@@ -2,6 +2,8 @@
 PLAN: "feat: MountSave and MountDelete — the server half of the shapes the screen sends; no module declares {records}/{ids} again"
 EXECUTOR: jules
 REVIEWER: none
+STATUS: running
+SESSION: 3150967760845298565
 ---
 
 > Read AGENTS.md at the repo root before any change.
