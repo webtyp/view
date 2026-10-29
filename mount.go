@@ -6,6 +6,9 @@ import (
 	"webtyp.com/rpc"
 )
 
+// statusNoContent answers a delete: the screen decodes nothing.
+const statusNoContent = 204
+
 // MountSave registers op as the save operation of a screen: it reads the records
 // the screen sends ({"records":[…]}), calls save for each one in order, and
 // answers the last one saved (save may fill its id). Errors go through
@@ -35,7 +38,9 @@ func MountSave[T any, PT interface {
 			}
 			lastSaved = rec
 		}
-		_ = ctx.Encode(lastSaved)
+		if err := ctx.Encode(lastSaved); err != nil {
+			rpc.WriteError(ctx, err)
+		}
 	}).Accepts(PT(new(T)))
 }
 
@@ -58,6 +63,6 @@ func MountDelete(reg router.OperationRegistry, op string, remove func(ids []stri
 			rpc.WriteError(ctx, err)
 			return
 		}
-		ctx.WriteStatus(204)
+		ctx.WriteStatus(statusNoContent)
 	})
 }
