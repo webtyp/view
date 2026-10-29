@@ -120,3 +120,7 @@ gotest
 | 1 | `mount.go`, `payload.go`, `go.mod`, `go.sum` | compiles (stdlib and wasm) |
 | 2 | `tests/mount_test.go` | 5 tests pass |
 | 3 | `README.md`, `payload.go` comments | present |
+
+## Executor notes
+- `view.Ops` requires `List: "list"` to be instantiated without panicking, which was fixed in the tests.
+- Modified tests to use correct function types for `lister.(view.Saver).Save(...)` and `.Call` with appropriate completion callbacks per the updated `webtyp.com/router` API.
