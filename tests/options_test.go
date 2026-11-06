@@ -8,7 +8,7 @@ import (
 	"webtyp.com/view"
 )
 
-type plainLister struct{
+type plainLister struct {
 	records *view.Records
 }
 
@@ -19,11 +19,13 @@ func (l *plainLister) Records() *view.Records {
 	return l.records
 }
 
-func (l *plainLister) List(done func([]view.Record, error)) {
+func (l *plainLister) Page() view.Page { return view.Page{First: view.All} }
+
+func (l *plainLister) List(_ view.ListArgs, done func([]view.Record, error)) {
 	done(nil, nil)
 }
 
-type crudLister struct{
+type crudLister struct {
 	records *view.Records
 }
 
@@ -34,7 +36,9 @@ func (l *crudLister) Records() *view.Records {
 	return l.records
 }
 
-func (l *crudLister) List(done func([]view.Record, error)) {
+func (l *crudLister) Page() view.Page { return view.Page{First: view.All} }
+
+func (l *crudLister) List(_ view.ListArgs, done func([]view.Record, error)) {
 	done(nil, nil)
 }
 

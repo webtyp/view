@@ -22,7 +22,9 @@ a defect — report it.
 | Load / refresh the list | `p.Reload(func(err error){ … })` — results arrive asynchronously |
 | Pick a record and get its full model | `m := p.Select(id)` (`nil` if the id is unknown) |
 | Clear the selection | `p.Deselect()` |
-| Filter the list as the user types | `p.Filter(term)` (local, case-insensitive over Label+Description) |
+| Search as the user types | `p.Search(term, done)` — runs on the server, `Page.Size` rows at a time |
+| Load the next rows at the end of the scroll | `if p.HasMore() { p.More(done) }` |
+| Declare how much the list loads | `view.Ops{…, Page: view.Page{First: 0, Size: 20, More: true}}` ([page.go](page.go)) |
 | Connect over a transport (mcp, http) | `view.NewCallerLister(records.Caller(caller), view.Ops{…}, newList)` then `view.New(l, &X{}, …)` |
 | Run a command on the whole list | `Ops.Actions` + `presenter.(view.Actioner).Run(op, done)` |
 | Show an error/success message | Renderer's job: branch on the `error` passed to the `done` callback of `Reload`/`Save`/`Delete` |
@@ -43,7 +45,9 @@ type deviceStore struct{ db *orm.DB }
 // Every operation is asynchronous: the result is handed to done, which is
 // always non-nil. An in-process store may call it immediately; a transport
 // calls it from its own callback. Never block, never return the result.
-func (s *deviceStore) List(done func([]model.Model, error)) {
+func (s *deviceStore) Page() view.Page { return view.Page{First: view.All} }
+
+func (s *deviceStore) List(args view.ListArgs, done func([]model.Model, error)) {
 	var rows []model.Model
 	err := s.db.Query(&Device{}).ReadAll(
 		func() model.Model { return &Device{} },
@@ -192,7 +196,9 @@ type Presenter interface {
 	Record() Record
 
 	Items() []model.Item             // the rows of this presenter's model, newest first
-	Filter(term string) []model.Item // local case-insensitive match over Label+Description; "" returns all
+	Search(term string, done func(error)) // asks the server; "" = back to Reload
+	HasMore() bool
+	More(done func(error))
 
 	// Reload asks the Lister for the records, then projects and indexes them.
 	// The result is asynchronous: done runs once, after List delivers, and the
@@ -226,9 +232,10 @@ type Deleter interface {
 
 // Lister is what a view needs from the application: the records to show.
 type Lister interface {
-	// List asks for every record. The result arrives asynchronously through
+	// List asks for one page: args.Search, args.After (last id shown), args.Limit. The result arrives asynchronously through
 	// done, which is always non-nil; List must NOT block waiting for it.
-	List(done func(rows []model.Model, err error))
+	List(args ListArgs, done func(rows []model.Model, err error))
+	Page() Page // how much the list loads on open and per search or scroll step
 }
 
 // Ops names the remote operations a CallerLister invokes. An empty name means
@@ -275,7 +282,8 @@ import (
 // Step 1 — the store implements the domain seam (List + the writes it supports).
 type catalogStore struct{ /* … */ }
 
-func (s *catalogStore) List(done func([]model.Model, error)) { /* … done(rows, err) */ }
+func (s *catalogStore) Page() view.Page { return view.Page{First: view.All} }
+func (s *catalogStore) List(args view.ListArgs, done func([]model.Model, error)) { /* … done(rows, err) */ }
 func (s *catalogStore) Save(recs []model.Model, done func(error)) { /* … done(err) */ }
 
 // Step 2 — build the presenter. No projection loop, no cache, no fill:
@@ -332,7 +340,7 @@ func (r *Renderer) OnSaveClicked() {
 }
 
 func (r *Renderer) OnSearchTyped(term string) {
-	r.drawList(r.p.Filter(term)) // local filtering
+	r.p.Search(term, func(error) { r.drawList(r.p.Items()) }) // the server searches
 }
 ```
 

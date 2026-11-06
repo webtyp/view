@@ -1,4 +1,3 @@
-
 package view
 
 import (
@@ -23,8 +22,10 @@ type core struct {
 	description       lang.Text
 	emptyMessage      lang.Text
 
-	order    []string // ids of the last List, in its order; ids put later go first
+	order    []string // ids of the listed rows, in List order; ids put later go first
 	selected string
+	term     string // the search the listed rows answer ("" = none)
+	more     bool   // the last page was full: the server may have more rows for term
 }
 
 func (p *core) Title() string {
@@ -74,19 +75,69 @@ func (p *core) Selected() string {
 	return p.selected
 }
 
+// Reload loads what the list shows on open (Page.First): nothing when First is 0 (the screen waits for a search),
+// every row up to MaxPage when First is All. It clears any search.
 func (p *core) Reload(done func(error)) {
 	if done == nil {
 		done = func(error) {}
 	}
-	p.lister.List(func(rows []Record, err error) {
+	page := p.lister.Page().declared()
+	p.term = ""
+	switch page.First {
+	case 0:
+		p.order, p.more = p.order[:0], false
+		done(nil)
+	case All:
+		p.load(ListArgs{Limit: MaxPage}, false, false, done)
+	default:
+		p.load(ListArgs{Limit: int64(page.First)}, false, page.More, done)
+	}
+}
+
+// Search asks the server for the rows matching term, one Page.Size at a time; "" goes back to what Reload shows.
+func (p *core) Search(term string, done func(error)) {
+	if done == nil {
+		done = func(error) {}
+	}
+	if term == "" {
+		p.Reload(done)
+		return
+	}
+	page := p.lister.Page().declared()
+	p.term = term
+	p.load(ListArgs{Search: term, Limit: int64(page.Size)}, false, page.More, done)
+}
+
+// HasMore reports whether the last page was full, so scrolling to the end may bring more rows.
+func (p *core) HasMore() bool { return p.more }
+
+// More asks for the rows after the last one shown, for the same search. With nothing more it does nothing.
+func (p *core) More(done func(error)) {
+	if done == nil {
+		done = func(error) {}
+	}
+	if !p.more || len(p.order) == 0 {
+		done(nil)
+		return
+	}
+	page := p.lister.Page().declared()
+	p.load(ListArgs{Search: p.term, After: p.order[len(p.order)-1], Limit: int64(page.Size)}, true, page.More, done)
+}
+
+// load calls List and records its rows: replacing the listed ones, or after them when appending.
+func (p *core) load(args ListArgs, appending, paged bool, done func(error)) {
+	p.lister.List(args, func(rows []Record, err error) {
 		if err != nil {
 			done(err)
 			return
 		}
-		p.order = p.order[:0]
+		if !appending {
+			p.order = p.order[:0]
+		}
 		for _, row := range rows {
 			p.order = append(p.order, row.Item().ID)
 		}
+		p.more = paged && int64(len(rows)) == args.Limit
 		p.lister.Records().Put(rows...)
 		done(nil)
 	})
@@ -107,22 +158,6 @@ func (p *core) Select(id string) Record {
 
 func (p *core) Deselect() {
 	p.selected = ""
-}
-
-func (p *core) Filter(term string) []model.Item {
-	items := p.Items()
-	if term == "" {
-		res := make([]model.Item, len(items))
-		copy(res, items)
-		return res
-	}
-	var filtered []model.Item
-	for _, it := range items {
-		if fmt.Matches(it.Label, term) || fmt.Matches(it.Description, term) {
-			filtered = append(filtered, it)
-		}
-	}
-	return filtered
 }
 
 func (c *core) save(recs []model.Model, done func(error)) {

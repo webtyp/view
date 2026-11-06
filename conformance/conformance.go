@@ -3,6 +3,7 @@ package conformance
 import (
 	"sync"
 	"testing"
+	"webtyp.com/fmt"
 
 	"webtyp.com/input"
 	"webtyp.com/model"
@@ -14,7 +15,9 @@ import (
 // it carries every capability; capability-absence clauses below use the
 // purpose-built minimal doubles instead.
 type FakeLister struct {
-	Rows []view.Record // what List returns
+	Rows     []view.Record // the rows a server holds, in its stable order
+	PageSize view.Page     // what Page() declares (zero = view.DefaultPage)
+	LastArgs view.ListArgs // the args of the last List call
 
 	Calls         int
 	SavedRecords  []model.Model
@@ -49,16 +52,34 @@ func (b *FakeLister) RunAction(op string, args model.Encodable, done func(error)
 	done(nil)
 }
 
-func (b *FakeLister) List(done func([]view.Record, error)) {
+// List answers like a server: rows whose Item label contains args.Search (case-insensitive), after args.After,
+// at most args.Limit.
+func (b *FakeLister) List(args view.ListArgs, done func([]view.Record, error)) {
 	b.Calls++
+	b.LastArgs = args
 	if b.Err != nil {
 		done(nil, b.Err)
 		return
 	}
-	out := make([]view.Record, len(b.Rows))
-	copy(out, b.Rows)
+	var out []view.Record
+	started := args.After == ""
+	for _, r := range b.Rows {
+		if !started {
+			started = r.Item().ID == args.After
+			continue
+		}
+		if args.Search != "" && !fmt.Matches(r.Item().Label, args.Search) {
+			continue
+		}
+		if args.Limit > 0 && int64(len(out)) == args.Limit {
+			break
+		}
+		out = append(out, r)
+	}
 	done(out, nil)
 }
+
+func (b *FakeLister) Page() view.Page { return b.PageSize }
 
 func (b *FakeLister) Save(recs []model.Model, done func(error)) {
 	if b.Err != nil {
@@ -116,7 +137,9 @@ func (b *listOnlyLister) Records() *view.Records {
 	return b.records
 }
 
-func (b *listOnlyLister) List(done func([]view.Record, error)) {
+func (b *listOnlyLister) Page() view.Page { return view.Page{First: view.All} }
+
+func (b *listOnlyLister) List(_ view.ListArgs, done func([]view.Record, error)) {
 	out := make([]view.Record, len(b.rows))
 	copy(out, b.rows)
 	done(out, nil)
@@ -138,7 +161,9 @@ func (b *listSaveLister) Records() *view.Records {
 	return b.records
 }
 
-func (b *listSaveLister) List(done func([]view.Record, error)) {
+func (b *listSaveLister) Page() view.Page { return view.Page{First: view.All} }
+
+func (b *listSaveLister) List(_ view.ListArgs, done func([]view.Record, error)) {
 	out := make([]view.Record, len(b.rows))
 	copy(out, b.rows)
 	done(out, nil)
@@ -167,7 +192,9 @@ func (b *deferredLister) Records() *view.Records {
 	return b.records
 }
 
-func (b *deferredLister) List(done func([]view.Record, error)) {
+func (b *deferredLister) Page() view.Page { return view.Page{First: view.All} }
+
+func (b *deferredLister) List(_ view.ListArgs, done func([]view.Record, error)) {
 	b.done = done
 }
 
@@ -703,29 +730,48 @@ func Run(t *testing.T, f Factory) {
 		}
 	})
 
-	t.Run("filter_matches_label", func(t *testing.T) {
-		fb := &FakeLister{
-			Rows: []view.Record{
-				&MockRecord{ID: "1", Name: "Alice"},
-				&MockRecord{ID: "2", Name: "Bob"},
-			},
+	t.Run("first_zero_waits_for_a_search", func(t *testing.T) {
+		fb := &FakeLister{Rows: []view.Record{&MockRecord{ID: "1", Name: "Alice"}}, PageSize: view.Page{First: 0, Size: 20, More: true}}
+		p := view.New(fb, &MockRecord{})
+		p.Reload(nil)
+		if fb.Calls != 0 || len(p.Items()) != 0 {
+			t.Errorf("Page.First 0: Reload must not call List and must list nothing, got %d calls, %d items", fb.Calls, len(p.Items()))
 		}
-		record := &MockRecord{}
-		p := view.New(fb, record)
+	})
 
-		driver := f.New(t, p)
-		driver.Mount()
-
-		// Case-insensitive match on label:
-		res := p.Filter("alice")
-		if len(res) != 1 || res[0].ID != "1" {
-			t.Errorf("expected 1 result matching 'alice', got %v", res)
+	t.Run("search_pages_until_no_more", func(t *testing.T) {
+		var rows []view.Record
+		for i := 0; i < 5; i++ {
+			rows = append(rows, &MockRecord{ID: string(rune('a' + i)), Name: "maria " + string(rune('a'+i))})
 		}
+		rows = append(rows, &MockRecord{ID: "z", Name: "pedro"})
+		fb := &FakeLister{Rows: rows, PageSize: view.Page{First: 0, Size: 2, More: true}}
+		p := view.New(fb, &MockRecord{})
+		p.Search("maria", nil)
+		if fb.LastArgs.Search != "maria" || fb.LastArgs.Limit != 2 || len(p.Items()) != 2 || !p.HasMore() {
+			t.Fatalf("Search: want 2 rows and more, got args %+v, %d items, more %v", fb.LastArgs, len(p.Items()), p.HasMore())
+		}
+		p.More(nil)
+		if fb.LastArgs.After != "b" || len(p.Items()) != 4 || !p.HasMore() {
+			t.Fatalf("More: want rows after b appended (4), got args %+v, %d items", fb.LastArgs, len(p.Items()))
+		}
+		p.More(nil)
+		if len(p.Items()) != 5 || p.HasMore() {
+			t.Fatalf("last More: want 5 items and no more, got %d items, more %v", len(p.Items()), p.HasMore())
+		}
+		calls := fb.Calls
+		p.More(nil)
+		if fb.Calls != calls {
+			t.Errorf("More with nothing more must not call List")
+		}
+	})
 
-		// Empty term returns all:
-		res = p.Filter("")
-		if len(res) != 2 {
-			t.Errorf("expected all 2 results on empty term, got %v", res)
+	t.Run("first_all_loads_up_to_max_page", func(t *testing.T) {
+		fb := &FakeLister{Rows: []view.Record{&MockRecord{ID: "1", Name: "Alice"}, &MockRecord{ID: "2", Name: "Bob"}}, PageSize: view.Page{First: view.All}}
+		p := view.New(fb, &MockRecord{})
+		p.Reload(nil)
+		if fb.LastArgs.Limit != view.MaxPage || len(p.Items()) != 2 || p.HasMore() {
+			t.Errorf("Page.First All: want Limit MaxPage, 2 items, no more; got %+v, %d, %v", fb.LastArgs, len(p.Items()), p.HasMore())
 		}
 	})
 

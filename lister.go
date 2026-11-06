@@ -11,15 +11,20 @@ package view
 // method is a compile-time fact, not a configuration string that can be
 // misspelled.
 type Lister interface {
-	// List asks for every record, newest-first or in whatever order the
-	// application considers natural. view computes their items once on Put.
+	// List asks for one page of records: args.Search filters on the server ("" = no search), args.After is the id
+	// of the last row already shown ("" = from the start) and args.Limit how many rows to return. The rows come in
+	// the order the application considers natural, the same order every call, so After continues it.
 	//
 	// The result arrives asynchronously through done, which is always non-nil:
 	// List must NOT block waiting for the records, and must never assume the
 	// caller has them when it returns. Call done exactly once with either the
 	// rows or the error — for a transport that is the callback of the
 	// underlying call, for an in-process store it may be immediate.
-	List(done func(rows []Record, err error))
+	List(args ListArgs, done func(rows []Record, err error))
+
+	// Page is how much this list loads on open and per search or scroll step (see Page). The zero Page means
+	// DefaultPage.
+	Page() Page
 
 	// Records is the page's shared copy this lister's rows live in. A lister puts
 	// the record a Save answered with and removes deleted ids itself (Stage 3);

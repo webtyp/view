@@ -47,7 +47,8 @@ type Record interface {
 
 // Lister is what a view needs from the application: the records to show.
 type Lister interface {
-	List(done func(rows []Record, err error))
+	List(args ListArgs, done func(rows []Record, err error))
+	Page() Page
 }
 
 type Action struct {
@@ -74,7 +75,9 @@ type Presenter interface {
 	Record() Record
 
 	Items() []model.Item
-	Filter(term string) []model.Item
+	Search(term string, done func(error))
+	HasMore() bool
+	More(done func(error))
 	Reload(done func(error))
 
 	Selected() string
@@ -150,13 +153,13 @@ Applies to `List`, `Save`, `Update`, `Delete` and `Reload` alike.
 - `Items()` returns the projected list; before the first successful Reload it
   is empty.
 
-### 3.2 `Filter(term string) []model.Item`
+### 3.2 `Search`, `HasMore`, `More` — paged lists declared by the module
 
-- `term == ""` → a **copy** of all items (the caller may mutate it freely).
-- Otherwise the items whose `Label` or `Description` matches `term` with
-  `fmt.Matches` (case-insensitive substring). `Lead*` fields are never
-  searched. Result order follows `items`.
-
+The module declares `Page{First, Size, More}` (see `page.go`): `First` rows on open (0 = wait for a search, `All` =
+every row up to `MaxPage`), `Size` rows per search and per scroll step, `More` = the scroll asks for the rows after
+the last one shown until a page comes back shorter than `Size`. The search runs on the server (`ListArgs.Search`):
+with pages the browser never holds every row, so a local filter would miss records that exist. A list operation
+decodes `view.ListArgs` and caps its limit with `view.Cap` (`MaxPage`).
 ### 3.3 Selection
 
 | Call | Result |

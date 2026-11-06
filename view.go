@@ -26,14 +26,20 @@ type Presenter interface {
 	EmptyMessage() lang.Text
 	Record() Record
 
-	Items() []model.Item             // the rows of this presenter's model, newest first
-	Filter(term string) []model.Item // local case-insensitive match over Label+Description; "" returns all
+	Items() []model.Item // the listed rows of this presenter's model (plus those saved since), in List order
 
-	// Reload asks the Lister for the records, then projects and indexes them.
-	// The result is asynchronous: done runs once, after List delivers, and the
-	// renderer paints Items() from inside it. done is always safe to call even
-	// if the caller passes nil.
+	// Reload loads what the list shows on open (the Lister's Page.First: 0 = nothing until a search, All = every
+	// row up to MaxPage) and clears any search. The result is asynchronous: done runs once, after List delivers,
+	// and the renderer paints Items() from inside it. done is always safe to call even if the caller passes nil.
 	Reload(done func(error))
+
+	// Search asks the server for the rows matching term, Page.Size at a time ("" = back to Reload). The search runs
+	// on the server: with pages the browser never holds every row.
+	Search(term string, done func(error))
+
+	// HasMore reports whether scrolling to the end may bring more rows for the current search; More brings them.
+	HasMore() bool
+	More(done func(error))
 
 	Selected() string        // currently selected id ("" if none)
 	Select(id string) Record // marks id and returns its record from the internal index; unknown id → nil, selection unchanged

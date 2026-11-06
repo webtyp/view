@@ -212,8 +212,10 @@ type countedLister struct {
 	records *view.Records
 }
 
-func (l *countedLister) Records() *view.Records               { return l.records }
-func (l *countedLister) List(done func([]view.Record, error)) { done(nil, nil) }
+func (l *countedLister) Records() *view.Records { return l.records }
+func (l *countedLister) Page() view.Page        { return view.Page{First: view.All} }
+
+func (l *countedLister) List(_ view.ListArgs, done func([]view.Record, error)) { done(nil, nil) }
 
 func TestRecords_ItemComputedOncePerPut(t *testing.T) {
 	calls := 0
@@ -236,8 +238,6 @@ func TestRecords_ItemComputedOncePerPut(t *testing.T) {
 	p := view.New(l, &countedRecord{id: "0", calls: &calls})
 	for i := 0; i < 10; i++ {
 		_ = p.Items()
-		_ = p.Filter("")
-		_ = p.Filter("1")
 	}
 
 	if calls != 3 {

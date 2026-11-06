@@ -24,6 +24,7 @@ type Ops struct {
 	Update  string
 	Delete  string
 	Actions []Action
+	Page    Page // how much the list loads on open and per search or scroll step; zero = DefaultPage
 }
 
 // qualified returns a copy of o with every non-empty op name prefixed by
@@ -127,6 +128,8 @@ type callerLister struct {
 
 func (b *callerLister) Records() *Records { return b.records }
 
+func (b *callerLister) Page() Page { return b.ops.Page }
+
 func (b *callerLister) Actions() []Action {
 	return b.rawActions
 }
@@ -150,14 +153,14 @@ var (
 	opSaveListerPrefix = "view: Save:"
 )
 
-func (b *callerLister) list(done func([]Record, error)) {
+func (b *callerLister) list(args ListArgs, done func([]Record, error)) {
 	list := b.newList()
 	dec, ok := list.(model.Decodable)
 	if !ok {
 		done(nil, fmt.Err("view: list returned by newList", "does not implement", typeName("model.Decodable")))
 		return
 	}
-	b.caller.Call(b.ops.List, nil, dec, func(err error) {
+	b.caller.Call(b.ops.List, &args, dec, func(err error) {
 		if err != nil {
 			done(nil, err)
 			return
@@ -228,16 +231,16 @@ type callerList struct {
 	*callerLister
 }
 
-func (b *callerList) List(done func([]Record, error)) {
-	b.list(done)
+func (b *callerList) List(args ListArgs, done func([]Record, error)) {
+	b.list(args, done)
 }
 
 type callerSave struct {
 	*callerLister
 }
 
-func (b *callerSave) List(done func([]Record, error)) {
-	b.list(done)
+func (b *callerSave) List(args ListArgs, done func([]Record, error)) {
+	b.list(args, done)
 }
 
 func (b *callerSave) Save(recs []model.Model, done func(error)) {
@@ -248,8 +251,8 @@ type callerUpdate struct {
 	*callerLister
 }
 
-func (b *callerUpdate) List(done func([]Record, error)) {
-	b.list(done)
+func (b *callerUpdate) List(args ListArgs, done func([]Record, error)) {
+	b.list(args, done)
 }
 
 func (b *callerUpdate) Update(ids []string, rec model.Model, fields []string, done func(error)) {
@@ -260,8 +263,8 @@ type callerDelete struct {
 	*callerLister
 }
 
-func (b *callerDelete) List(done func([]Record, error)) {
-	b.list(done)
+func (b *callerDelete) List(args ListArgs, done func([]Record, error)) {
+	b.list(args, done)
 }
 
 func (b *callerDelete) Delete(ids []string, done func(error)) {
@@ -272,8 +275,8 @@ type callerSaveUpdate struct {
 	*callerLister
 }
 
-func (b *callerSaveUpdate) List(done func([]Record, error)) {
-	b.list(done)
+func (b *callerSaveUpdate) List(args ListArgs, done func([]Record, error)) {
+	b.list(args, done)
 }
 
 func (b *callerSaveUpdate) Save(recs []model.Model, done func(error)) {
@@ -288,8 +291,8 @@ type callerSaveDelete struct {
 	*callerLister
 }
 
-func (b *callerSaveDelete) List(done func([]Record, error)) {
-	b.list(done)
+func (b *callerSaveDelete) List(args ListArgs, done func([]Record, error)) {
+	b.list(args, done)
 }
 
 func (b *callerSaveDelete) Save(recs []model.Model, done func(error)) {
@@ -304,8 +307,8 @@ type callerUpdateDelete struct {
 	*callerLister
 }
 
-func (b *callerUpdateDelete) List(done func([]Record, error)) {
-	b.list(done)
+func (b *callerUpdateDelete) List(args ListArgs, done func([]Record, error)) {
+	b.list(args, done)
 }
 
 func (b *callerUpdateDelete) Update(ids []string, rec model.Model, fields []string, done func(error)) {
@@ -320,8 +323,8 @@ type callerCRUD struct {
 	*callerLister
 }
 
-func (b *callerCRUD) List(done func([]Record, error)) {
-	b.list(done)
+func (b *callerCRUD) List(args ListArgs, done func([]Record, error)) {
+	b.list(args, done)
 }
 
 func (b *callerCRUD) Save(recs []model.Model, done func(error)) {

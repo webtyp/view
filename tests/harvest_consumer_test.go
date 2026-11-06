@@ -43,7 +43,7 @@ func TestQualifiedNameMatchesHarvestOps(t *testing.T) {
 	view.NewCallerLister(recordsCaller,
 		view.Ops{Module: mod.ModelName(), List: "list"},
 		newMockList,
-	).List(func([]view.Record, error) {})
+	).List(view.ListArgs{}, func([]view.Record, error) {})
 
 	if len(caller.calls) != 1 {
 		t.Fatalf("expected 1 call, got %d", len(caller.calls))

@@ -55,13 +55,13 @@ func (w *payloadWriter) put(name, val string) {
 	w.out = append(w.out, fmt.KeyValue{Key: name, Value: val})
 }
 
-func (w *payloadWriter) String(name, val string)   { w.put(name, val) }
-func (w *payloadWriter) Int(name string, v int64)  { w.put(name, fmt.Sprintf("%d", v)) }
+func (w *payloadWriter) String(name, val string)      { w.put(name, val) }
+func (w *payloadWriter) Int(name string, v int64)     { w.put(name, fmt.Sprintf("%d", v)) }
 func (w *payloadWriter) Float(name string, v float64) { w.put(name, fmt.Sprintf("%v", v)) }
-func (w *payloadWriter) Bool(name string, v bool)  { w.put(name, fmt.Sprintf("%t", v)) }
-func (w *payloadWriter) Bytes(name string, v []byte) { w.put(name, string(v)) }
-func (w *payloadWriter) Null(name string)          { w.put(name, "") }
-func (w *payloadWriter) Raw(name, val string)      { w.put(name, val) }
+func (w *payloadWriter) Bool(name string, v bool)     { w.put(name, fmt.Sprintf("%t", v)) }
+func (w *payloadWriter) Bytes(name string, v []byte)  { w.put(name, string(v)) }
+func (w *payloadWriter) Null(name string)             { w.put(name, "") }
+func (w *payloadWriter) Raw(name, val string)         { w.put(name, val) }
 
 func (w *payloadWriter) Object(name string, val model.Encodable) {
 	if val == nil || val.IsNil() {
@@ -81,11 +81,11 @@ type payloadArray struct {
 	name   string
 }
 
-func (a *payloadArray) String(v string)  { a.parent.put(a.name, v) }
-func (a *payloadArray) Int(v int64)      { a.parent.put(a.name, fmt.Sprintf("%d", v)) }
-func (a *payloadArray) Float(v float64)  { a.parent.put(a.name, fmt.Sprintf("%v", v)) }
-func (a *payloadArray) Bool(v bool)      { a.parent.put(a.name, fmt.Sprintf("%t", v)) }
-func (a *payloadArray) Bytes(v []byte)   { a.parent.put(a.name, string(v)) }
+func (a *payloadArray) String(v string) { a.parent.put(a.name, v) }
+func (a *payloadArray) Int(v int64)     { a.parent.put(a.name, fmt.Sprintf("%d", v)) }
+func (a *payloadArray) Float(v float64) { a.parent.put(a.name, fmt.Sprintf("%v", v)) }
+func (a *payloadArray) Bool(v bool)     { a.parent.put(a.name, fmt.Sprintf("%t", v)) }
+func (a *payloadArray) Bytes(v []byte)  { a.parent.put(a.name, string(v)) }
 
 func (a *payloadArray) Object(v model.Encodable) {
 	if v == nil || v.IsNil() {

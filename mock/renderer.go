@@ -189,9 +189,10 @@ func (r *Renderer) Cancel() {
 	r.focused = ""
 }
 
-// Filter filters the presenter items and returns their labels.
-func (r *Renderer) Filter(term string) []string {
-	items := r.p.Filter(term)
+// Search asks the presenter to search term and returns the labels of the rows it lists.
+func (r *Renderer) Search(term string) []string {
+	r.p.Search(term, nil)
+	items := r.p.Items()
 	labels := make([]string, len(items))
 	for i, item := range items {
 		labels[i] = item.Label

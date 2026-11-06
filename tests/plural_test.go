@@ -263,7 +263,9 @@ func (l *deferredLister) Records() *view.Records {
 	return l.records
 }
 
-func (l *deferredLister) List(done func([]view.Record, error)) { l.done = done }
+func (l *deferredLister) Page() view.Page { return view.Page{First: view.All} }
+
+func (l *deferredLister) List(_ view.ListArgs, done func([]view.Record, error)) { l.done = done }
 
 // TestListDoneRunsLater is the package-level twin of the conformance clause
 // no_blocking_in_list: Reload must project only when List's done finally runs,
