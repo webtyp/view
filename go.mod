@@ -7,7 +7,7 @@ require (
 	webtyp.com/fmt v1.0.0
 	webtyp.com/input v0.0.20
 	webtyp.com/json v0.5.37
-	webtyp.com/lang v0.1.12
+	webtyp.com/lang v0.1.13
 	webtyp.com/mcp v0.3.14
 	webtyp.com/model v0.2.12
 	webtyp.com/router v0.4.17
