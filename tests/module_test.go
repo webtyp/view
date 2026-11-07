@@ -3,6 +3,7 @@ package tests
 import (
 	"testing"
 
+	"webtyp.com/crud"
 	"webtyp.com/model"
 	"webtyp.com/router/mock"
 	"webtyp.com/view"
@@ -17,7 +18,7 @@ func TestModulePerspective(t *testing.T) {
 
 	recordsCaller := view.NewRecords().Caller(caller)
 	b := view.NewCallerLister(recordsCaller,
-		view.Ops{Module: "m", List: "list_items", Save: "save_item", Delete: "delete_item"},
+		view.Ops{Module: "m", Allow: model.Create | model.Delete},
 		func() model.ModelSlice {
 			return &conformance.MockList{}
 		})
@@ -66,13 +67,14 @@ func TestModulePerspective(t *testing.T) {
 	}
 
 	var foundSaveCall bool
+	expectedSave := "m." + crud.Op(record, model.Create)
 	for _, call := range caller.Calls {
-		if call.Op == "m.save_item" {
+		if call.Op == expectedSave {
 			foundSaveCall = true
 		}
 	}
 	if !foundSaveCall {
-		t.Errorf("expected save call to m.save_item")
+		t.Errorf("expected save call to %s", expectedSave)
 	}
 
 	// 4. Delete -> DeleteOp with ID
@@ -87,13 +89,14 @@ func TestModulePerspective(t *testing.T) {
 	}
 
 	var foundDeleteCall bool
+	expectedDelete := "m." + crud.Op(record, model.Delete)
 	for _, call := range caller.Calls {
-		if call.Op == "m.delete_item" {
+		if call.Op == expectedDelete {
 			foundDeleteCall = true
 		}
 	}
 	if !foundDeleteCall {
-		t.Errorf("expected delete call to m.delete_item")
+		t.Errorf("expected delete call to %s", expectedDelete)
 	}
 
 	// 5. Deselect() -> Selected() is cleared

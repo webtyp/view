@@ -3,8 +3,9 @@ package conformance
 import (
 	"sync"
 	"testing"
-	"webtyp.com/fmt"
 
+	"webtyp.com/crud"
+	"webtyp.com/fmt"
 	"webtyp.com/input"
 	"webtyp.com/model"
 	"webtyp.com/view"
@@ -17,7 +18,7 @@ import (
 type FakeLister struct {
 	Rows     []view.Record // the rows a server holds, in its stable order
 	PageSize view.Page     // what Page() declares (zero = view.DefaultPage)
-	LastArgs view.ListArgs // the args of the last List call
+	LastArgs crud.ReadArgs // the args of the last List call
 
 	Calls         int
 	SavedRecords  []model.Model
@@ -54,7 +55,7 @@ func (b *FakeLister) RunAction(op string, args model.Encodable, done func(error)
 
 // List answers like a server: rows whose Item label contains args.Search (case-insensitive), after args.After,
 // at most args.Limit.
-func (b *FakeLister) List(args view.ListArgs, done func([]view.Record, error)) {
+func (b *FakeLister) List(args crud.ReadArgs, done func([]view.Record, error)) {
 	b.Calls++
 	b.LastArgs = args
 	if b.Err != nil {
@@ -139,7 +140,7 @@ func (b *listOnlyLister) Records() *view.Records {
 
 func (b *listOnlyLister) Page() view.Page { return view.Page{First: view.All} }
 
-func (b *listOnlyLister) List(_ view.ListArgs, done func([]view.Record, error)) {
+func (b *listOnlyLister) List(_ crud.ReadArgs, done func([]view.Record, error)) {
 	out := make([]view.Record, len(b.rows))
 	copy(out, b.rows)
 	done(out, nil)
@@ -163,7 +164,7 @@ func (b *listSaveLister) Records() *view.Records {
 
 func (b *listSaveLister) Page() view.Page { return view.Page{First: view.All} }
 
-func (b *listSaveLister) List(_ view.ListArgs, done func([]view.Record, error)) {
+func (b *listSaveLister) List(_ crud.ReadArgs, done func([]view.Record, error)) {
 	out := make([]view.Record, len(b.rows))
 	copy(out, b.rows)
 	done(out, nil)
@@ -194,7 +195,7 @@ func (b *deferredLister) Records() *view.Records {
 
 func (b *deferredLister) Page() view.Page { return view.Page{First: view.All} }
 
-func (b *deferredLister) List(_ view.ListArgs, done func([]view.Record, error)) {
+func (b *deferredLister) List(_ crud.ReadArgs, done func([]view.Record, error)) {
 	b.done = done
 }
 
@@ -790,7 +791,7 @@ func Run(t *testing.T, f Factory) {
 		fb := &FakeLister{Rows: []view.Record{&MockRecord{ID: "1", Name: "Alice"}, &MockRecord{ID: "2", Name: "Bob"}}, PageSize: view.Page{First: view.All}}
 		p := view.New(fb, &MockRecord{})
 		p.Reload(nil)
-		if fb.LastArgs.Limit != view.MaxPage || len(p.Items()) != 2 || p.HasMore() {
+		if fb.LastArgs.Limit != crud.MaxPage || len(p.Items()) != 2 || p.HasMore() {
 			t.Errorf("Page.First All: want Limit MaxPage, 2 items, no more; got %+v, %d, %v", fb.LastArgs, len(p.Items()), p.HasMore())
 		}
 	})

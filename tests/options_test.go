@@ -3,6 +3,7 @@ package tests
 import (
 	"testing"
 
+	"webtyp.com/crud"
 	"webtyp.com/lang"
 	"webtyp.com/model"
 	"webtyp.com/view"
@@ -21,7 +22,7 @@ func (l *plainLister) Records() *view.Records {
 
 func (l *plainLister) Page() view.Page { return view.Page{First: view.All} }
 
-func (l *plainLister) List(_ view.ListArgs, done func([]view.Record, error)) {
+func (l *plainLister) List(_ crud.ReadArgs, done func([]view.Record, error)) {
 	done(nil, nil)
 }
 
@@ -38,7 +39,7 @@ func (l *crudLister) Records() *view.Records {
 
 func (l *crudLister) Page() view.Page { return view.Page{First: view.All} }
 
-func (l *crudLister) List(_ view.ListArgs, done func([]view.Record, error)) {
+func (l *crudLister) List(_ crud.ReadArgs, done func([]view.Record, error)) {
 	done(nil, nil)
 }
 

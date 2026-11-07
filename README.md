@@ -47,7 +47,7 @@ type deviceStore struct{ db *orm.DB }
 // calls it from its own callback. Never block, never return the result.
 func (s *deviceStore) Page() view.Page { return view.Page{First: view.All} }
 
-func (s *deviceStore) List(args view.ListArgs, done func([]model.Model, error)) {
+func (s *deviceStore) List(args crud.ReadArgs, done func([]model.Model, error)) {
 	var rows []model.Model
 	err := s.db.Query(&Device{}).ReadAll(
 		func() model.Model { return &Device{} },
@@ -283,7 +283,7 @@ import (
 type catalogStore struct{ /* … */ }
 
 func (s *catalogStore) Page() view.Page { return view.Page{First: view.All} }
-func (s *catalogStore) List(args view.ListArgs, done func([]model.Model, error)) { /* … done(rows, err) */ }
+func (s *catalogStore) List(args crud.ReadArgs, done func([]model.Model, error)) { /* … done(rows, err) */ }
 func (s *catalogStore) Save(recs []model.Model, done func(error)) { /* … done(err) */ }
 
 // Step 2 — build the presenter. No projection loop, no cache, no fill:

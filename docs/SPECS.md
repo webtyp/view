@@ -159,7 +159,7 @@ The module declares `Page{First, Size, More}` (see `page.go`): `First` rows on o
 every row up to `MaxPage`), `Size` rows per search and per scroll step, `More` = the scroll asks for the rows after
 the last one shown until a page comes back shorter than `Size`. The search runs on the server (`ListArgs.Search`):
 with pages the browser never holds every row, so a local filter would miss records that exist. A list operation
-decodes `view.ListArgs` and caps its limit with `view.Cap` (`MaxPage`).
+decodes `crud.ReadArgs` and caps its limit with `crud.Cap` (`MaxPage`).
 ### 3.3 Selection
 
 | Call | Result |

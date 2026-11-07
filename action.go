@@ -45,5 +45,5 @@ var (
 	_ Actioner = (*saveableUpdatable)(nil)
 	_ Actioner = (*saveableDeletable)(nil)
 	_ Actioner = (*updatableDeletable)(nil)
-	_ Actioner = (*crud)(nil)
+	_ Actioner = (*crudPresenter)(nil)
 )

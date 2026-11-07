@@ -3,7 +3,6 @@
   "keys": {
     "\u003cunnamed type\u003e": ["\u003ctipo sin nombre\u003e", "\u003c未命名类型\u003e", "\u003cअनाम प्रकार\u003e", "\u003cنوع غير مسمى\u003e", "\u003ctipo sem nome\u003e", "\u003ctype sans nom\u003e", "\u003cunbenannter Typ\u003e", "\u003cбезымянный тип\u003e"],
     "does not implement": ["no implementa", "未实现", "लागू नहीं करता", "لا يطبق", "não implementa", "n'implémente pas", "implementiert nicht", "не реализует"],
-    "field": ["campo", "字段", "फ़ील्ड", "حقل", "campo", "champ", "Feld", "поле"],
     "has no Item(): mark its fields with Item: model.ItemLabel and run ormc": ["no tiene Item(): marca sus campos con Item: model.ItemLabel y ejecuta ormc", "没有 Item()：使用 Item: model.ItemLabel 标记其字段并运行 ormc", "में कोई Item() नहीं है: इसके फ़ील्ड्स को Item: model.ItemLabel से चिह्नित करें और ormc चलाएं", "لا يحتوي على Item(): حدد حقوله بـ Item: model.ItemLabel وقم بتشغيل ormc", "não tem Item(): marque seus campos com Item: model.ItemLabel e execute ormc", "n'a pas d'Item() : marquez ses champs avec Item: model.ItemLabel et exécutez ormc", "hat kein Item(): markieren Sie seine Felder mit Item: model.ItemLabel und führen Sie ormc aus", "не имеет Item(): отметьте его поля с помощью Item: model.ItemLabel и запустите ormc"],
     "is nil": ["es nil", "为 nil", "nil है", "فارغ", "é nil", "est nil", "ist nil", "nil"],
     "payload": ["carga útil", "负载", "पेलोड", "الحمولة", "payload", "charge utile", "Payload", "полезная нагрузка"],

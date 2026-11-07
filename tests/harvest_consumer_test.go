@@ -3,47 +3,48 @@ package tests
 import (
 	"testing"
 
+	"webtyp.com/crud"
 	"webtyp.com/mcp"
-	"webtyp.com/router"
+	"webtyp.com/model"
 	"webtyp.com/view"
+	"webtyp.com/view/conformance"
 )
 
-// harvestConsumerModule is a router.OperationModule exactly as a domain
+// harvestConsumerModule is a crud.Module exactly as a domain
 // library writes one — the real shape mcp.HarvestOps consumes server-side.
 type harvestConsumerModule struct{}
 
-func (harvestConsumerModule) ModelName() string { return "widget" }
-func (harvestConsumerModule) MountOperations(r router.OperationRegistry) {
-	r.Operation("list", func(ctx router.Context) {}).Public()
+func (harvestConsumerModule) ModelName() string { return "conformance_mock_record" }
+func (harvestConsumerModule) MountOperations(r crud.Registry) {
+	r.Read(&conformance.MockRecord{}, nil, func(c crud.Caller, args crud.ReadArgs, filter model.Model) (model.ModelSlice, error) {
+		return &conformance.MockList{}, nil
+	})
 }
 
-var _ router.OperationModule = harvestConsumerModule{}
+var _ crud.Module = harvestConsumerModule{}
 
-// TestQualifiedNameMatchesHarvestOps is the consumer-shape proof the
-// op-namespacing change is built for: the SAME two inputs — a module's
-// ModelName() and the bare op name it registers — must produce the
-// identical wire string on both sides of the seam. Neither side is handed
-// the other's output; if this test ever needed a hand-written qualified
-// literal to pass, the seam would still be broken.
 func TestQualifiedNameMatchesHarvestOps(t *testing.T) {
 	mod := harvestConsumerModule{}
 
 	// Server side: the real mcp.HarvestOps, the one a composition root uses.
-	provider, _ := mcp.HarvestOps([]mcp.ToolName{"widget.list"}, mod)
+	expectedTool := mcp.ToolNameOf("conformance_mock_record", crud.Op(&conformance.MockRecord{}, model.Read))
+	provider, err := mcp.HarvestOps([]mcp.ToolName{expectedTool}, mod)
+	if err != nil {
+		t.Fatalf("HarvestOps: %v", err)
+	}
 	tools := provider.Tools()
 	if len(tools) != 1 {
 		t.Fatalf("expected 1 harvested tool, got %d", len(tools))
 	}
-	serverName := tools[0].Name
+	serverName := string(tools[0].Name)
 
-	// Client side: view.Ops built from the SAME ModelName() and the SAME
-	// bare op name — no qualified literal typed anywhere in this test.
+	// Client side: view.Ops built from the SAME ModelName()
 	caller := &recordCaller{}
 	recordsCaller := view.NewRecords().Caller(caller)
 	view.NewCallerLister(recordsCaller,
-		view.Ops{Module: mod.ModelName(), List: "list"},
+		view.Ops{Module: mod.ModelName()},
 		newMockList,
-	).List(view.ListArgs{}, func([]view.Record, error) {})
+	).List(crud.ReadArgs{}, func([]view.Record, error) {})
 
 	if len(caller.calls) != 1 {
 		t.Fatalf("expected 1 call, got %d", len(caller.calls))

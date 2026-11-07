@@ -1,6 +1,7 @@
 package view
 
 import (
+	"webtyp.com/crud"
 	"webtyp.com/fmt"
 	"webtyp.com/lang"
 	"webtyp.com/model"
@@ -93,9 +94,9 @@ func (p *core) Reload(done func(error)) {
 		p.order, p.more = p.order[:0], false
 		done(nil)
 	case All:
-		p.load(ListArgs{Limit: MaxPage}, false, false, done)
+		p.load(crud.ReadArgs{Limit: crud.MaxPage}, false, false, done)
 	default:
-		p.load(ListArgs{Limit: int64(page.First)}, false, page.More, done)
+		p.load(crud.ReadArgs{Limit: int64(page.First)}, false, page.More, done)
 	}
 }
 
@@ -110,7 +111,7 @@ func (p *core) Search(term string, done func(error)) {
 	}
 	page := p.lister.Page().declared()
 	p.term = term
-	p.load(ListArgs{Search: term, Limit: int64(page.Size)}, false, page.More, done)
+	p.load(crud.ReadArgs{Search: term, Limit: int64(page.Size)}, false, page.More, done)
 }
 
 // HasMore reports whether the last page was full, so scrolling to the end may bring more rows.
@@ -126,11 +127,11 @@ func (p *core) More(done func(error)) {
 		return
 	}
 	page := p.lister.Page().declared()
-	p.load(ListArgs{Search: p.term, After: p.order[len(p.order)-1], Limit: int64(page.Size)}, true, page.More, done)
+	p.load(crud.ReadArgs{Search: p.term, After: p.order[len(p.order)-1], Limit: int64(page.Size)}, true, page.More, done)
 }
 
 // load calls List and records its rows: replacing the listed ones, or after them when appending.
-func (p *core) load(args ListArgs, appending, paged bool, done func(error)) {
+func (p *core) load(args crud.ReadArgs, appending, paged bool, done func(error)) {
 	p.lister.List(args, func(rows []Record, err error) {
 		if err != nil {
 			done(err)
@@ -348,23 +349,23 @@ func (ud *updatableDeletable) Delete(ids []string, done func(error)) {
 	ud.delete(ids, done)
 }
 
-type crud struct {
+type crudPresenter struct {
 	*core
 }
 
-func (c *crud) OnChange(fn func()) {
+func (c *crudPresenter) OnChange(fn func()) {
 	c.core.OnChange(fn)
 }
 
-func (c *crud) Save(recs []model.Model, done func(error)) {
+func (c *crudPresenter) Save(recs []model.Model, done func(error)) {
 	c.save(recs, done)
 }
 
-func (c *crud) Update(ids []string, rec model.Model, fields []string, done func(error)) {
+func (c *crudPresenter) Update(ids []string, rec model.Model, fields []string, done func(error)) {
 	c.update(ids, rec, fields, done)
 }
 
-func (c *crud) Delete(ids []string, done func(error)) {
+func (c *crudPresenter) Delete(ids []string, done func(error)) {
 	c.delete(ids, done)
 }
 

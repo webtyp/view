@@ -1,5 +1,7 @@
 package view
 
+import "webtyp.com/crud"
+
 // Lister is what a view needs from the application: the records to show.
 // Mandatory — a view with nothing to list is not a view.
 //
@@ -20,7 +22,7 @@ type Lister interface {
 	// caller has them when it returns. Call done exactly once with either the
 	// rows or the error — for a transport that is the callback of the
 	// underlying call, for an in-process store it may be immediate.
-	List(args ListArgs, done func(rows []Record, err error))
+	List(args crud.ReadArgs, done func(rows []Record, err error))
 
 	// Page is how much this list loads on open and per search or scroll step (see Page). The zero Page means
 	// DefaultPage.

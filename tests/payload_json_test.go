@@ -6,6 +6,7 @@ import (
 	stdjson "encoding/json"
 	"testing"
 
+	"webtyp.com/crud"
 	"webtyp.com/json"
 	"webtyp.com/model"
 	"webtyp.com/view"
@@ -18,7 +19,7 @@ import (
 func TestCallerListerSendsValidJSON(t *testing.T) {
 	caller := &recordCaller{}
 	b := view.NewCallerLister(view.NewRecords().Caller(caller),
-		view.Ops{Module: "m", List: "l", Save: "s", Update: "u", Delete: "d"}, newMockList)
+		view.Ops{Module: "m", Allow: model.Create | model.Update | model.Delete}, newMockList)
 	p := view.New(b, &conformance.MockRecord{}, view.WithTitle("t"))
 
 	p.(view.Saver).Save([]model.Model{&conformance.MockRecord{ID: "10", Name: "Ten"}}, func(error) {})
@@ -28,8 +29,9 @@ func TestCallerListerSendsValidJSON(t *testing.T) {
 	p.(view.Deleter).Delete([]string{"1"}, func(error) {})
 
 	var sent []recordCall
+	opRead := "m." + crud.Op(&conformance.MockRecord{}, model.Read)
 	for _, c := range caller.calls {
-		if c.op != "m.l" {
+		if c.op != opRead {
 			sent = append(sent, c)
 		}
 	}

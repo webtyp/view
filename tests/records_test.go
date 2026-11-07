@@ -3,6 +3,7 @@ package tests
 import (
 	"testing"
 
+	"webtyp.com/crud"
 	"webtyp.com/model"
 	"webtyp.com/view"
 	"webtyp.com/view/conformance"
@@ -140,7 +141,7 @@ func TestPresenter_SavedRowFirst(t *testing.T) {
 
 func TestNewCallerLister_RequiresRecordsCaller(t *testing.T) {
 	plainCaller := &testCaller{}
-	ops := view.Ops{Module: "m", List: "l"}
+	ops := view.Ops{Module: "m"}
 
 	defer func() {
 		r := recover()
@@ -174,7 +175,7 @@ func TestCallerLister_SavePutsServerAnswer(t *testing.T) {
 	caller := records.Caller(&singleAnswerCaller{
 		answer: &conformance.MockRecord{ID: "x", Name: "Server name"},
 	})
-	ops := view.Ops{Module: "MockRecord", List: "l", Save: "s"}
+	ops := view.Ops{Module: "MockRecord", Allow: model.Create}
 
 	l := view.NewCallerLister(caller, ops, func() model.ModelSlice { return &conformance.MockList{} })
 
@@ -215,7 +216,7 @@ type countedLister struct {
 func (l *countedLister) Records() *view.Records { return l.records }
 func (l *countedLister) Page() view.Page        { return view.Page{First: view.All} }
 
-func (l *countedLister) List(_ view.ListArgs, done func([]view.Record, error)) { done(nil, nil) }
+func (l *countedLister) List(_ crud.ReadArgs, done func([]view.Record, error)) { done(nil, nil) }
 
 func TestRecords_ItemComputedOncePerPut(t *testing.T) {
 	calls := 0

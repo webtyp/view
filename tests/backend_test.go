@@ -3,6 +3,7 @@ package tests
 import (
 	"testing"
 
+	"webtyp.com/crud"
 	"webtyp.com/model"
 	"webtyp.com/view"
 	"webtyp.com/view/conformance"
@@ -25,7 +26,7 @@ func (s *memStore) Records() *view.Records {
 
 func (s *memStore) Page() view.Page { return view.Page{First: view.All} }
 
-func (s *memStore) List(_ view.ListArgs, done func([]view.Record, error)) {
+func (s *memStore) List(_ crud.ReadArgs, done func([]view.Record, error)) {
 	out := make([]view.Record, 0, len(s.rows))
 	for _, r := range s.rows {
 		out = append(out, r)

@@ -3,6 +3,7 @@ package tests
 import (
 	"testing"
 
+	"webtyp.com/crud"
 	"webtyp.com/input"
 	"webtyp.com/model"
 	"webtyp.com/router"
@@ -21,7 +22,8 @@ type dummyCaller struct {
 
 func (c *dummyCaller) Call(op string, args model.Encodable, into model.Decodable, done func(err error)) {
 	c.calls = append(c.calls, dummyCallerCall{op: op, args: args})
-	if op == "m.list_op" && into != nil {
+	opRead := "m." + crud.Op(&dummyRecord{}, model.Read)
+	if (op == "m.list_op" || op == opRead) && into != nil {
 		if l, ok := into.(*dummyList); ok {
 			a := l.Append().(*dummyRecord)
 			a.id, a.name = "1", "One"
@@ -87,7 +89,7 @@ func (l *dummyList) Append() model.Fielder {
 func setupView(caller *dummyCaller) view.Presenter {
 	recordsCaller := view.NewRecords().Caller(caller)
 	b := view.NewCallerLister(recordsCaller,
-		view.Ops{Module: "m", List: "list_op", Save: "save_op", Update: "update_op", Delete: "delete_op"},
+		view.Ops{Module: "m", Allow: model.Create | model.Update | model.Delete},
 		func() model.ModelSlice { return &dummyList{} })
 	return view.New(b, &dummyRecord{}, view.WithTitle("t"))
 }
@@ -122,8 +124,9 @@ func TestSaveShipsEveryRecordInOneCall(t *testing.T) {
 	if len(caller.calls) != 1 {
 		t.Fatalf("expected 1 caller call, got %d", len(caller.calls))
 	}
-	if caller.calls[0].op != "m.save_op" {
-		t.Errorf("expected op 'm.save_op', got %q", caller.calls[0].op)
+	expectedCreate := "m." + crud.Op(&dummyRecord{}, model.Create)
+	if caller.calls[0].op != expectedCreate {
+		t.Errorf("expected op %q, got %q", expectedCreate, caller.calls[0].op)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "name", "A") || !conformance.Has(pairs, "name", "B") || !conformance.Has(pairs, "name", "C") {
@@ -172,8 +175,9 @@ func TestUpdateShipsIDsFieldsAndRecord(t *testing.T) {
 	if len(caller.calls) != 1 {
 		t.Fatalf("expected 1 call, got %d", len(caller.calls))
 	}
-	if caller.calls[0].op != "m.update_op" {
-		t.Errorf("expected op 'm.update_op', got %q", caller.calls[0].op)
+	expectedUpdate := "m." + crud.Op(&dummyRecord{}, model.Update)
+	if caller.calls[0].op != expectedUpdate {
+		t.Errorf("expected op %q, got %q", expectedUpdate, caller.calls[0].op)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "ids", "1") || !conformance.Has(pairs, "ids", "2") || !conformance.Has(pairs, "fields", "name") || !conformance.Has(pairs, "name", "Patched") {
@@ -239,8 +243,9 @@ func TestDeleteShipsEveryIDInOneCall(t *testing.T) {
 	if len(caller.calls) != 1 {
 		t.Fatalf("expected 1 call, got %d", len(caller.calls))
 	}
-	if caller.calls[0].op != "m.delete_op" {
-		t.Errorf("expected op 'm.delete_op', got %q", caller.calls[0].op)
+	expectedDelete := "m." + crud.Op(&dummyRecord{}, model.Delete)
+	if caller.calls[0].op != expectedDelete {
+		t.Errorf("expected op %q, got %q", expectedDelete, caller.calls[0].op)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "ids", "1") || !conformance.Has(pairs, "ids", "2") || !conformance.Has(pairs, "ids", "3") {
@@ -265,7 +270,7 @@ func (l *deferredLister) Records() *view.Records {
 
 func (l *deferredLister) Page() view.Page { return view.Page{First: view.All} }
 
-func (l *deferredLister) List(_ view.ListArgs, done func([]view.Record, error)) { l.done = done }
+func (l *deferredLister) List(_ crud.ReadArgs, done func([]view.Record, error)) { l.done = done }
 
 // TestListDoneRunsLater is the package-level twin of the conformance clause
 // no_blocking_in_list: Reload must project only when List's done finally runs,

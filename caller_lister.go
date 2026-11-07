@@ -1,46 +1,26 @@
 package view
 
 import (
+	"webtyp.com/crud"
 	"webtyp.com/fmt"
 	"webtyp.com/model"
 	"webtyp.com/router"
 )
 
-// Ops names the remote operations a CallerLister invokes, scoped to Module —
-// the same string the server's router.OperationModule.ModelName() returns
-// for the module that harvests these operations (mcp.HarvestOps qualifies
-// every Tool.Name as "<ModelName>.<name>"; see that package's own doc).
-// NewCallerLister composes the identical qualified name here, so no caller
-// ever writes "module.op" as a hand-assembled literal — the two sides read
-// it off the same two strings (Module + the bare op name) instead of a
-// string neither owns.
-//
-// An empty op name means the remote side does not offer that operation, and
-// the returned Lister will not carry the matching capability.
+// Ops names the remote operations a CallerLister invokes, scoped to Module.
+// The 4 CRUD operations are derived automatically via crud.Op(sample, action).
+// Write capabilities are governed by Allow (model.Create, model.Update, model.Delete;
+// model.Read is always enabled).
 type Ops struct {
 	Module  string
-	List    string
-	Save    string
-	Update  string
-	Delete  string
+	Allow   model.Action // write capabilities (model.Create, model.Update, model.Delete; model.Read is always enabled)
 	Actions []Action
 	Page    Page // how much the list loads on open and per search or scroll step; zero = DefaultPage
 }
 
-// qualified returns a copy of o with every non-empty op name prefixed by
-// Module — the exact transformation mcp.HarvestOps applies server-side.
+// qualified returns a copy of o with every non-empty action op prefixed by Module.
 func (o Ops) qualified() Ops {
 	q := o
-	q.List = o.Module + "." + o.List
-	if o.Save != "" {
-		q.Save = o.Module + "." + o.Save
-	}
-	if o.Update != "" {
-		q.Update = o.Module + "." + o.Update
-	}
-	if o.Delete != "" {
-		q.Delete = o.Module + "." + o.Delete
-	}
 	if len(o.Actions) > 0 {
 		q.Actions = make([]Action, len(o.Actions))
 		for i, a := range o.Actions {
@@ -58,8 +38,8 @@ func (o Ops) qualified() Ops {
 // newList builds the empty slice the transport decodes into; that is a codec
 // concern, which is why it lives here and not in New.
 //
-// Ops.Module and Ops.List are required. The returned Lister implements
-// exactly the write capabilities whose op names are non-empty, so view.New's
+// Ops.Module is required. The returned Lister implements
+// exactly the write capabilities declared in Ops.Allow, so view.New's
 // assertions stay honest for a remote backend too.
 func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) Lister {
 	if c == nil {
@@ -72,9 +52,6 @@ func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) 
 	if ops.Module == "" {
 		panic("view: NewCallerLister: Ops.Module is required — it must match the server module's ModelName()")
 	}
-	if ops.List == "" {
-		panic("view: NewCallerLister: Ops.List is required")
-	}
 	if newList == nil {
 		panic("view: NewCallerLister: newList is required")
 	}
@@ -86,17 +63,30 @@ func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) 
 			panic("view: NewCallerLister: Action.Label is required")
 		}
 	}
+
+	sample := newList().Append().(model.Model)
+	opRead := ops.Module + "." + crud.Op(sample, model.Read)
+	opCreate := ops.Module + "." + crud.Op(sample, model.Create)
+	opUpdate := ops.Module + "." + crud.Op(sample, model.Update)
+	opDelete := ops.Module + "." + crud.Op(sample, model.Delete)
+
 	cb := &callerLister{
 		caller:     c,
 		ops:        ops.qualified(),
 		rawActions: ops.Actions,
 		newList:    newList,
 		records:    rc.records,
-		modelName:  newList().Append().(model.Model).ModelName(),
+		modelName:  sample.ModelName(),
+		opRead:     opRead,
+		opCreate:   opCreate,
+		opUpdate:   opUpdate,
+		opDelete:   opDelete,
 	}
-	hasS := ops.Save != ""
-	hasU := ops.Update != ""
-	hasD := ops.Delete != ""
+
+	hasS := ops.Allow.Has(model.Create)
+	hasU := ops.Allow.Has(model.Update)
+	hasD := ops.Allow.Has(model.Delete)
+
 	switch {
 	case hasS && hasU && hasD:
 		return &callerCRUD{callerLister: cb}
@@ -124,6 +114,10 @@ type callerLister struct {
 	newList    func() model.ModelSlice
 	records    *Records
 	modelName  string
+	opRead     string
+	opCreate   string
+	opUpdate   string
+	opDelete   string
 }
 
 func (b *callerLister) Records() *Records { return b.records }
@@ -153,14 +147,14 @@ var (
 	opSaveListerPrefix = "view: Save:"
 )
 
-func (b *callerLister) list(args ListArgs, done func([]Record, error)) {
+func (b *callerLister) list(args crud.ReadArgs, done func([]Record, error)) {
 	list := b.newList()
 	dec, ok := list.(model.Decodable)
 	if !ok {
 		done(nil, fmt.Err("view: list returned by newList", "does not implement", typeName("model.Decodable")))
 		return
 	}
-	b.caller.Call(b.ops.List, &args, dec, func(err error) {
+	b.caller.Call(b.opRead, &args, dec, func(err error) {
 		if err != nil {
 			done(nil, err)
 			return
@@ -185,7 +179,7 @@ func (b *callerLister) save(recs []model.Model, done func(error)) {
 		done(fmt.Err(opSaveListerPrefix, "row type", rowName(raw), "has no Item(): mark its fields with Item: model.ItemLabel and run ormc"))
 		return
 	}
-	b.caller.Call(b.ops.Save, &saveArgs{recs: recs}, saved, func(err error) {
+	b.caller.Call(b.opCreate, &crud.CreateArgs{Records: recs}, saved, func(err error) {
 		if err == nil {
 			b.records.Put(saved)
 		}
@@ -201,11 +195,11 @@ func rowName(v any) string {
 }
 
 func (b *callerLister) update(ids []string, rec model.Model, fields []string, done func(error)) {
-	b.caller.Call(b.ops.Update, &updateArgs{ids: ids, fields: fields, rec: rec}, nil, done)
+	b.caller.Call(b.opUpdate, &crud.UpdateArgs{IDs: ids, Fields: fields, Record: rec}, nil, done)
 }
 
 func (b *callerLister) delete(ids []string, done func(error)) {
-	b.caller.Call(b.ops.Delete, &deleteArgs{ids: ids}, nil, func(err error) {
+	b.caller.Call(b.opDelete, &crud.DeleteArgs{IDs: ids}, nil, func(err error) {
 		if err == nil {
 			b.records.Remove(b.modelName, ids...)
 		}
@@ -231,7 +225,7 @@ type callerList struct {
 	*callerLister
 }
 
-func (b *callerList) List(args ListArgs, done func([]Record, error)) {
+func (b *callerList) List(args crud.ReadArgs, done func([]Record, error)) {
 	b.list(args, done)
 }
 
@@ -239,7 +233,7 @@ type callerSave struct {
 	*callerLister
 }
 
-func (b *callerSave) List(args ListArgs, done func([]Record, error)) {
+func (b *callerSave) List(args crud.ReadArgs, done func([]Record, error)) {
 	b.list(args, done)
 }
 
@@ -251,7 +245,7 @@ type callerUpdate struct {
 	*callerLister
 }
 
-func (b *callerUpdate) List(args ListArgs, done func([]Record, error)) {
+func (b *callerUpdate) List(args crud.ReadArgs, done func([]Record, error)) {
 	b.list(args, done)
 }
 
@@ -263,7 +257,7 @@ type callerDelete struct {
 	*callerLister
 }
 
-func (b *callerDelete) List(args ListArgs, done func([]Record, error)) {
+func (b *callerDelete) List(args crud.ReadArgs, done func([]Record, error)) {
 	b.list(args, done)
 }
 
@@ -275,7 +269,7 @@ type callerSaveUpdate struct {
 	*callerLister
 }
 
-func (b *callerSaveUpdate) List(args ListArgs, done func([]Record, error)) {
+func (b *callerSaveUpdate) List(args crud.ReadArgs, done func([]Record, error)) {
 	b.list(args, done)
 }
 
@@ -291,7 +285,7 @@ type callerSaveDelete struct {
 	*callerLister
 }
 
-func (b *callerSaveDelete) List(args ListArgs, done func([]Record, error)) {
+func (b *callerSaveDelete) List(args crud.ReadArgs, done func([]Record, error)) {
 	b.list(args, done)
 }
 
@@ -307,7 +301,7 @@ type callerUpdateDelete struct {
 	*callerLister
 }
 
-func (b *callerUpdateDelete) List(args ListArgs, done func([]Record, error)) {
+func (b *callerUpdateDelete) List(args crud.ReadArgs, done func([]Record, error)) {
 	b.list(args, done)
 }
 
@@ -323,7 +317,7 @@ type callerCRUD struct {
 	*callerLister
 }
 
-func (b *callerCRUD) List(args ListArgs, done func([]Record, error)) {
+func (b *callerCRUD) List(args crud.ReadArgs, done func([]Record, error)) {
 	b.list(args, done)
 }
 

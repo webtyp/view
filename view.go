@@ -177,7 +177,7 @@ func New(
 
 	switch {
 	case hasS && hasU && hasD:
-		return &crud{core: c}
+		return &crudPresenter{core: c}
 	case hasS && hasU:
 		return &saveableUpdatable{core: c}
 	case hasS && hasD:
