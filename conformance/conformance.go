@@ -766,6 +766,26 @@ func Run(t *testing.T, f Factory) {
 		}
 	})
 
+	t.Run("search_narrows_items_even_after_reload", func(t *testing.T) {
+		fb := &FakeLister{
+			Rows: []view.Record{
+				&MockRecord{ID: "1", Name: "Frontend Device"},
+				&MockRecord{ID: "2", Name: "Backend Server"},
+				&MockRecord{ID: "3", Name: "Database Instance"},
+			},
+			PageSize: view.Page{First: view.All, Size: 10},
+		}
+		p := view.New(fb, &MockRecord{})
+		p.Reload(nil)
+		if len(p.Items()) != 3 {
+			t.Fatalf("Reload: want 3 items, got %d", len(p.Items()))
+		}
+		p.Search("Backend", nil)
+		if len(p.Items()) != 1 || p.Items()[0].Label != "Backend Server" {
+			t.Fatalf("Search: want only Backend Server, got %v", p.Items())
+		}
+	})
+
 	t.Run("first_all_loads_up_to_max_page", func(t *testing.T) {
 		fb := &FakeLister{Rows: []view.Record{&MockRecord{ID: "1", Name: "Alice"}, &MockRecord{ID: "2", Name: "Bob"}}, PageSize: view.Page{First: view.All}}
 		p := view.New(fb, &MockRecord{})

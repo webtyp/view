@@ -50,20 +50,25 @@ func (p *core) Record() Record {
 
 // Items: the rows of this model in the shared copy — those this presenter never
 // listed (saved here or elsewhere, synced) first, then the listed ones in List order.
+// When a search is active, only the rows matching the search (listed ones) are returned.
 func (p *core) Items() []model.Item {
 	entries := p.lister.Records().items(p.record.ModelName())
-	var fresh, listed []model.Item
-	for _, e := range entries {
-		if !containsID(p.order, e.item.ID) {
-			fresh = append(fresh, e.item)
-		}
-	}
+	var listed []model.Item
 	for _, id := range p.order {
 		for _, e := range entries {
 			if e.item.ID == id {
 				listed = append(listed, e.item)
 				break
 			}
+		}
+	}
+	if p.term != "" {
+		return listed
+	}
+	var fresh []model.Item
+	for _, e := range entries {
+		if !containsID(p.order, e.item.ID) {
+			fresh = append(fresh, e.item)
 		}
 	}
 	return append(fresh, listed...)
