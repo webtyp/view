@@ -290,6 +290,20 @@ func (m *MockRecord) DecodeFields(r model.FieldReader) {
 // MockList is a list holding simulation records.
 type MockList struct {
 	items []*MockRecord
+	allow model.Action
+}
+
+// Allow implements model.TableSlice.
+func (m *MockList) Allow() model.Action {
+	if m.allow == 0 {
+		return model.Read | model.Create | model.Update | model.Delete
+	}
+	return m.allow
+}
+
+// SetAllow sets what this list allows.
+func (m *MockList) SetAllow(a model.Action) {
+	m.allow = a
 }
 
 // IsNil implements model.Model.

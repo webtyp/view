@@ -15,9 +15,9 @@ a defect — report it.
 |---|---|
 | Create a list/detail view for my model | `view.New(lister, &X{}, opts...)` where `lister` implements `view.Lister` |
 | Make my rows appear in the list | Fields marked `Item:…`; `ormc` generates `Item() model.Item` |
-| Enable saving | Implement `Save(recs []model.Model, done func(error))` — the returned Presenter then satisfies `view.Saver` |
-| Enable field patches | Implement `Update(ids []string, rec model.Model, fields []string, done func(error))` — the Presenter then satisfies `view.Updater` |
-| Enable deleting | Implement `Delete(ids []string, done func(error))` — the returned Presenter then satisfies `view.Deleter` |
+| Enable saving | Add `model.Create` to `Allow` in the model's `Definition` (and rerun `ormc`); on a custom Lister implement `Save(recs []model.Model, done func(error))` — the returned Presenter then satisfies `view.Saver` |
+| Enable field patches | Add `model.Update` to `Allow` in the model's `Definition` (and rerun `ormc`); on a custom Lister implement `Update(ids []string, rec model.Model, fields []string, done func(error))` — the Presenter then satisfies `view.Updater` |
+| Enable deleting | Add `model.Delete` to `Allow` in the model's `Definition` (and rerun `ormc`); on a custom Lister implement `Delete(ids []string, done func(error))` — the returned Presenter then satisfies `view.Deleter` |
 | Know if the view can save/delete (renderer side) | `s, ok := p.(view.Saver)` / `d, ok := p.(view.Deleter)` |
 | Load / refresh the list | `p.Reload(func(err error){ … })` — results arrive asynchronously |
 | Pick a record and get its full model | `m := p.Select(id)` (`nil` if the id is unknown) |
@@ -84,16 +84,16 @@ view.New(&deviceStore{db: deviceDB}, &Device{}, view.WithTitle("Computadores"))
 owns, then build the view over it:
 
 ```go
-l := view.NewCallerLister(caller,
+l := view.NewCallerLister(records.Caller(caller),
 	view.Ops{
-		Module: "device", List: "list", Save: "save", Delete: "delete",
+		Module: "device",
 		Actions: []view.Action{{
 			Op: "apply_network", Label: "Apply",
 			Args: func(recs []model.Model) model.Encodable { return &ApplyArgs{Fingerprint: recs[0].(*Device).Plan} },
 		}},
 	},
-	func() model.ModelSlice { return &DeviceList{} })
-view.New(b, &Device{}, view.WithTitle("Computadores"))
+	func() model.TableSlice { return &DeviceList{} })
+view.New(l, &Device{}, view.WithTitle("Computadores"))
 ```
 
 Capabilities are **methods, not strings** — the renderer paints `+`/`🗑`/`✏`
@@ -242,16 +242,13 @@ type Lister interface {
 }
 
 // Ops names the remote operations a CallerLister invokes. An empty name means
-// the remote side does not offer that operation.
 type Ops struct {
-	Module string
-	List   string
-	Save   string
-	Update string
-	Delete string
+	Module  string
+	Actions []Action
+	Page    Page // how much the list loads on open and per search or scroll step; zero = DefaultPage
 }
 
-func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) Lister
+func NewCallerLister(c router.Caller, ops Ops, newList func() model.TableSlice) Lister
 
 // Option is a functional configuration option for New.
 type Option func(*config)

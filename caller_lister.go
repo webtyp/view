@@ -9,11 +9,9 @@ import (
 
 // Ops names the remote operations a CallerLister invokes, scoped to Module.
 // The 4 CRUD operations are derived automatically via crud.Op(sample, action).
-// Write capabilities are governed by Allow (model.Create, model.Update, model.Delete;
-// model.Read is always enabled).
+// Write capabilities are governed by the model's Allow() declaration.
 type Ops struct {
 	Module  string
-	Allow   model.Action // write capabilities (model.Create, model.Update, model.Delete; model.Read is always enabled)
 	Actions []Action
 	Page    Page // how much the list loads on open and per search or scroll step; zero = DefaultPage
 }
@@ -39,9 +37,9 @@ func (o Ops) qualified() Ops {
 // concern, which is why it lives here and not in New.
 //
 // Ops.Module is required. The returned Lister implements
-// exactly the write capabilities declared in Ops.Allow, so view.New's
+// exactly the write capabilities declared in the model's Allow(), so view.New's
 // assertions stay honest for a remote backend too.
-func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) Lister {
+func NewCallerLister(c router.Caller, ops Ops, newList func() model.TableSlice) Lister {
 	if c == nil {
 		panic("view: NewCallerLister: caller is required")
 	}
@@ -65,6 +63,11 @@ func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) 
 	}
 
 	sample := newList().Append().(model.Model)
+	allow := newList().Allow()
+	if !allow.Has(model.Read) {
+		panic("view: NewCallerLister: " + sample.ModelName() + " does not allow Read — add model.Read to Allow in its model.Definition (and rerun ormc)")
+	}
+
 	opRead := ops.Module + "." + crud.Op(sample, model.Read)
 	opCreate := ops.Module + "." + crud.Op(sample, model.Create)
 	opUpdate := ops.Module + "." + crud.Op(sample, model.Update)
@@ -74,7 +77,7 @@ func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) 
 		caller:     c,
 		ops:        ops.qualified(),
 		rawActions: ops.Actions,
-		newList:    newList,
+		newList:    func() model.ModelSlice { return newList() },
 		records:    rc.records,
 		modelName:  sample.ModelName(),
 		opRead:     opRead,
@@ -83,9 +86,9 @@ func NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) 
 		opDelete:   opDelete,
 	}
 
-	hasS := ops.Allow.Has(model.Create)
-	hasU := ops.Allow.Has(model.Update)
-	hasD := ops.Allow.Has(model.Delete)
+	hasS := allow.Has(model.Create)
+	hasU := allow.Has(model.Update)
+	hasD := allow.Has(model.Delete)
 
 	switch {
 	case hasS && hasU && hasD:

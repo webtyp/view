@@ -18,8 +18,8 @@ func TestModulePerspective(t *testing.T) {
 
 	recordsCaller := view.NewRecords().Caller(caller)
 	b := view.NewCallerLister(recordsCaller,
-		view.Ops{Module: "m", Allow: model.Create | model.Delete},
-		func() model.ModelSlice {
+		view.Ops{Module: "m"},
+		func() model.TableSlice {
 			return &conformance.MockList{}
 		})
 	p := view.New(b, record, view.WithTitle("t"))

@@ -85,12 +85,15 @@ func (l *dummyList) Append() model.Fielder {
 	l.items = append(l.items, it)
 	return it
 }
+func (l *dummyList) Allow() model.Action {
+	return model.Read | model.Create | model.Update | model.Delete
+}
 
 func setupView(caller *dummyCaller) view.Presenter {
 	recordsCaller := view.NewRecords().Caller(caller)
 	b := view.NewCallerLister(recordsCaller,
-		view.Ops{Module: "m", Allow: model.Create | model.Update | model.Delete},
-		func() model.ModelSlice { return &dummyList{} })
+		view.Ops{Module: "m"},
+		func() model.TableSlice { return &dummyList{} })
 	return view.New(b, &dummyRecord{}, view.WithTitle("t"))
 }
 

@@ -83,7 +83,7 @@ func TestActions(t *testing.T) {
 				{Op: "apply_network", Label: "Apply"},
 			},
 		}
-		lister := view.NewCallerLister(recordsCaller, ops, func() model.ModelSlice { return &conformance.MockList{} })
+		lister := view.NewCallerLister(recordsCaller, ops, func() model.TableSlice { return &conformance.MockList{} })
 
 		// Ensure caller's ops slice is unmodified
 		if ops.Actions[0].Op != "apply_network" {
@@ -108,14 +108,14 @@ func TestActions(t *testing.T) {
 			view.NewCallerLister(recordsCaller, view.Ops{
 				Module:  "m",
 				Actions: []view.Action{{Label: "l"}},
-			}, func() model.ModelSlice { return &conformance.MockList{} })
+			}, func() model.TableSlice { return &conformance.MockList{} })
 		})
 
 		assertPanic(t, "view: NewCallerLister: Action.Label is required", func() {
 			view.NewCallerLister(recordsCaller, view.Ops{
 				Module:  "m",
 				Actions: []view.Action{{Op: "o"}},
-			}, func() model.ModelSlice { return &conformance.MockList{} })
+			}, func() model.TableSlice { return &conformance.MockList{} })
 		})
 	})
 

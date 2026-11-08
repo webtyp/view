@@ -152,7 +152,7 @@ func TestNewCallerLister_RequiresRecordsCaller(t *testing.T) {
 		}
 	}()
 
-	view.NewCallerLister(plainCaller, ops, func() model.ModelSlice { return &conformance.MockList{} })
+	view.NewCallerLister(plainCaller, ops, func() model.TableSlice { return &conformance.MockList{} })
 }
 
 type singleAnswerCaller struct {
@@ -175,9 +175,9 @@ func TestCallerLister_SavePutsServerAnswer(t *testing.T) {
 	caller := records.Caller(&singleAnswerCaller{
 		answer: &conformance.MockRecord{ID: "x", Name: "Server name"},
 	})
-	ops := view.Ops{Module: "MockRecord", Allow: model.Create}
+	ops := view.Ops{Module: "MockRecord"}
 
-	l := view.NewCallerLister(caller, ops, func() model.ModelSlice { return &conformance.MockList{} })
+	l := view.NewCallerLister(caller, ops, func() model.TableSlice { return &conformance.MockList{} })
 
 	s := l.(view.Saver)
 	s.Save([]model.Model{&conformance.MockRecord{Name: "Client name"}}, func(error) {})

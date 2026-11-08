@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"strings"
 	"testing"
 
 	"webtyp.com/crud"
@@ -38,13 +39,13 @@ func (c *recordCaller) Dispatch(op string, args model.Encodable) {
 
 var _ router.Caller = (*recordCaller)(nil)
 
-func newMockList() model.ModelSlice { return &conformance.MockList{} }
+func newMockList() model.TableSlice { return &conformance.MockList{} }
 
 func TestCallerListerTransport(t *testing.T) {
 	caller := &recordCaller{}
 	recordsCaller := view.NewRecords().Caller(caller)
 	b := view.NewCallerLister(recordsCaller,
-		view.Ops{Module: "m", Allow: model.Create | model.Update | model.Delete},
+		view.Ops{Module: "m"},
 		newMockList)
 	p := view.New(b, &conformance.MockRecord{}, view.WithTitle("t"))
 
@@ -120,9 +121,14 @@ func TestCallerListerTransport(t *testing.T) {
 func TestCallerListerMissingDeleteOpCarriesNoCapability(t *testing.T) {
 	caller := &recordCaller{}
 	recordsCaller := view.NewRecords().Caller(caller)
+	newList := func() model.TableSlice {
+		l := &conformance.MockList{}
+		l.SetAllow(model.Read | model.Create | model.Update)
+		return l
+	}
 	b := view.NewCallerLister(recordsCaller,
-		view.Ops{Module: "m", Allow: model.Create | model.Update},
-		newMockList)
+		view.Ops{Module: "m"},
+		newList)
 
 	if _, ok := b.(view.Deleter); ok {
 		t.Errorf("expected Lister without Delete op to not implement view.Deleter")
@@ -133,3 +139,47 @@ func TestCallerListerMissingDeleteOpCarriesNoCapability(t *testing.T) {
 		t.Errorf("expected Presenter to not implement view.Deleter when Delete op is empty")
 	}
 }
+
+func TestCallerLister_CapabilitiesFromModelAllow(t *testing.T) {
+	caller := &recordCaller{}
+	recordsCaller := view.NewRecords().Caller(caller)
+	newList := func() model.TableSlice {
+		l := &conformance.MockList{}
+		l.SetAllow(model.Read | model.Create)
+		return l
+	}
+	b := view.NewCallerLister(recordsCaller, view.Ops{Module: "m"}, newList)
+
+	if _, ok := b.(view.Saver); !ok {
+		t.Errorf("expected Lister with Read|Create to implement view.Saver")
+	}
+	if _, ok := b.(view.Updater); ok {
+		t.Errorf("expected Lister with Read|Create to NOT implement view.Updater")
+	}
+	if _, ok := b.(view.Deleter); ok {
+		t.Errorf("expected Lister with Read|Create to NOT implement view.Deleter")
+	}
+}
+
+func TestCallerLister_NoReadPanics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic when model does not allow Read, got none")
+		}
+		msg, ok := r.(string)
+		if !ok || !strings.Contains(msg, "does not allow Read") {
+			t.Fatalf("expected panic message containing 'does not allow Read', got %v", r)
+		}
+	}()
+
+	caller := &recordCaller{}
+	recordsCaller := view.NewRecords().Caller(caller)
+	newList := func() model.TableSlice {
+		l := &conformance.MockList{}
+		l.SetAllow(model.Create)
+		return l
+	}
+	view.NewCallerLister(recordsCaller, view.Ops{Module: "m"}, newList)
+}
+

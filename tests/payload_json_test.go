@@ -19,7 +19,7 @@ import (
 func TestCallerListerSendsValidJSON(t *testing.T) {
 	caller := &recordCaller{}
 	b := view.NewCallerLister(view.NewRecords().Caller(caller),
-		view.Ops{Module: "m", Allow: model.Create | model.Update | model.Delete}, newMockList)
+		view.Ops{Module: "m"}, newMockList)
 	p := view.New(b, &conformance.MockRecord{}, view.WithTitle("t"))
 
 	p.(view.Saver).Save([]model.Model{&conformance.MockRecord{ID: "10", Name: "Ten"}}, func(error) {})
