@@ -31,6 +31,9 @@ a defect — report it.
 | Test a renderer implementation | `conformance.Run(t, factory)` — it must pass every clause |
 | Simulate a view without a browser | `view/mock.Renderer` |
 | Offer my module's screens to the app's menu without importing a renderer | `func Screens(caller router.Caller) []view.Screen` — a list leaf has `ID`, `Label`, `Icon`, `Permission`, `Presenter` (help = `view.WithDescription`); a screen that is not a list sets `Component` (a `dom.Component`) and `Help` instead of `Presenter`; a group has `ID`, `Label`, `Icon`, `Help`, `Children` and no permission of its own. The renderer calls `Screen.Validate()` first |
+| Tell the user saved/error from a custom screen | `view.UsesNotifier` |
+| Give my module a runnable demo | `seed.Demo() (view.Demo, error)` |
+| Be the entry module (sign-in) | `ModuleBrowser.Entry` returning `view.EntryScreens` |
 
 ## Connecting a view to your data
 

@@ -7,10 +7,11 @@ import (
 )
 
 var (
-	ErrDemoNoLabel    = fmt.Err("view.Demo has no Label: the page would have no title; set Label to the module's name")
-	ErrDemoNoTimezone = fmt.Err("view.Demo has no Timezone: dates cannot be shown; set Timezone, e.g. \"America/Santiago\"")
-	ErrDemoNoModules  = fmt.Err("view.Demo has no Modules: every screen would fail to load; add the module built in seed.Demo")
-	ErrDemoNoScreens  = fmt.Err("view.Demo has no Screens: the menu would be empty; set Screens to the module's ui.Screens")
+	demoExampleZone   = "America/Santiago"
+	ErrDemoNoLabel    = fmt.Err("view.Demo has no", "Label: the page would have no title; set Label to the module's name")
+	ErrDemoNoTimezone = fmt.Err("view.Demo has no", "Timezone: dates cannot be shown; set Timezone, e.g.", demoExampleZone)
+	ErrDemoNoModules  = fmt.Err("view.Demo has no", "Modules: every screen would fail to load; add the module built in seed.Demo")
+	ErrDemoNoScreens  = fmt.Err("view.Demo has no", "Screens: the menu would be empty; set Screens to the module's ui.Screens")
 )
 
 // Demo is a module's runnable demo: the module built on storage/mem with its seed data, and its screens.

@@ -4,6 +4,7 @@ go 1.26.8
 
 require (
 	webtyp.com/crud v0.0.3
+	webtyp.com/ddl v0.0.46
 	webtyp.com/dom v0.13.29
 	webtyp.com/fmt v1.0.0
 	webtyp.com/input v0.0.36
@@ -11,7 +12,9 @@ require (
 	webtyp.com/lang v0.1.14
 	webtyp.com/mcp v0.3.23
 	webtyp.com/model v0.2.14
+	webtyp.com/msgtype v0.1.0
 	webtyp.com/router v0.4.19
+	webtyp.com/time v0.6.4
 )
 
 require (
@@ -21,6 +24,6 @@ require (
 	webtyp.com/escape v0.1.0 // indirect
 	webtyp.com/fetch v0.1.29 // indirect
 	webtyp.com/filepath v0.1.0 // indirect
-	webtyp.com/time v0.6.4 // indirect
+	webtyp.com/storage v0.1.18 // indirect
 	webtyp.com/unixid v0.3.1 // indirect
 )
