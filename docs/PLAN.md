@@ -1,95 +1,197 @@
 ---
-PLAN: "refactor!: wire contract from webtyp.com/crud; view.Ops on model.Action"
+PLAN: "feat: view owns the module-to-chassis contracts — Notifier, BrowserDeps, ModuleBrowser, EntryScreens, Demo"
 EXECUTOR: antigravity
 REVIEWER: none
 ---
 
 > Read AGENTS.md at the repo root before any change.
 > **Finish by yourself:** when the delivery check passes, commit after every stage and stop. Never ask whether to
-> proceed. This plan runs **locally**: do not tag, push or publish anything; the owner reviews first.
-> Never run `git reset`, `git restore`, `git checkout -- <file>` or `git stash` on your own work.
+> proceed. This plan runs **locally** and is **published as soon as the delivery check passes** (no `replace` anywhere:
+> every dependency is a published version). Never run `git reset`, `git restore`, `git checkout -- <file>` or `git stash` on your own work.
 
-# Plan: Extract Wire Contract to `webtyp.com/crud` and Standardize `view.Ops` on `model.Action`
+# Plan: `view` holds every contract between a module and the chassis
 
-## Tools and local dependencies
+## Tools
 
 ```bash
 go install webtyp.com/devflow/cmd/gotest@latest
 go install webtyp.com/lang/cmd/langc@latest
+go get webtyp.com/ddl@v0.0.46 webtyp.com/msgtype@v0.1.0 webtyp.com/time@v0.6.4
 ```
-`go.mod`: `replace` for `webtyp.com/model`, `webtyp.com/router`, `webtyp.com/crud`, `webtyp.com/rpc` to `../model`, `../router`, `../crud`, `../rpc` (local, unpublished); then `go mod tidy`.
-Since master D13, `crud.ReadArgs` has a last field `Filter model.Model`: `view` never sets it (it stays nil); do not add filter UI here.
-Every `webtyp.com/router/loopback` import in `tests/` becomes `crud.Loopback(mods...)` / `crud.LoopbackActingAs(userID, mods...)` (the router package no longer exists), and every test module becomes a `crud.Module` (`MountOperations(reg crud.Registry)`); server-side helpers that called `view.MountSave/MountUpdate/MountDelete` or `crud.MountCreate/...` use `reg.Create/Read/Update/Delete`.
 
+## Why
 
-## Context & Goal
+A module's `go.mod` lists `webtyp.com/layout` (the chassis, which changes every week) only because the
+contracts it implements live there (`layout.Notifier`) or in `appkit`, which imports `layout`
+(`appkit.BrowserDeps`). After this plan, those contracts live here; `layout` (plan L2) and `appkit`
+(plan L3) import them from `view`. Decisions D15, D16, D17 of `webtyp/docs/ARCHITECTURE_MASTER_PLAN.md`.
 
-`webtyp.com/crud` now owns the wire contract between client screens and server handlers (`ReadArgs`, `CreateArgs`, `UpdateArgs`, `DeleteArgs`, `Cap`, `MaxPage`, `Op`, and the closed `crud.Registry` modules mount on). `webtyp.com/view` remains strictly the browser-side presenter and screen library (`Lister` and `List` represent the visual UI list component, while the wire payload is `crud.ReadArgs`).
+## Ecosystem search
 
-This plan removes the server/wire duplicates from `view` and updates `view.Ops` / `NewCallerLister` to derive the 4 standard CRUD operation names via `crud.Op(sample, action)` and `model.Action` instead of accepting `List`, `Save`, `Update`, `Delete` string fields.
+- `layout/capabilities.go`: `Duration`, `Auto`, `Persistent`, `For`, `Notifier`, `UsesNotifier` — **moved** here
+  verbatim (the only ones a module uses: `room_layout/ui/data.go`). `Badged`, `Described`, `Step`, `AlertedModule`,
+  `GroupModule`, `UIModule` stay in `layout`: no module implements them.
+- `appkit/module_browser.go`: `BrowserDeps`, `ModuleBrowser`, `EntryScreens` — **moved** here; `BrowserDeps` loses
+  `Brand` and `EntryScreens` carries data instead of finished elements (D17).
+- `Demo`, `Entry`: **new**. Closest existing: each module's hand-written `web/browser/main.go` (replaced by `Demo`)
+  and `layout/login.Login` (the chassis keeps it; `Entry` is only what the module fills).
 
-## Explicit Deletions
+## Design gate
 
-Delete these files and symbols completely (no aliases, no shims):
-- Delete `mount.go` (`MountSave`, `MountUpdate`, `MountDelete`).
-- Delete `payload.go` (`saveArgs`, `updateArgs`, `deleteArgs`, `saveIn`, `updateIn`, `deleteIn`, `ErrNoRecords`, `ErrNoIDs`, `ErrNoFields`, `ErrCannotRead`).
-- Delete `tests/mount_test.go` (moved to `webtyp.com/crud/tests/mount_test.go`).
-- In `page.go`: delete `MaxPage`, `Cap`, `ListArgs`, `ListArgsModel`, and all `(*ListArgs)` methods (`Schema`, `Pointers`, `IsNil`, `EncodeFields`, `DecodeFields`). Keep `Page`, `All`, `DefaultPage`, and `Page.declared()`.
-- In `tests/page_test.go`: delete `TestCap` and `TestListArgs_RoundTrip` (moved to `webtyp.com/crud/tests/read_test.go`); keep `TestCallerLister_SendsSearchAndPage`.
+1. **Prior art:** Django admin (`ModelAdmin` declares, the admin site draws — https://docs.djangoproject.com/en/5.1/ref/contrib/admin/),
+   Storybook (a component declares stories, the tool supplies the shell — https://storybook.js.org/docs/writing-stories),
+   React Admin (`<Resource>` declares, `<Admin>` lays out — https://marmelab.com/react-admin/Resource.html). All three:
+   the piece declares data, the host owns the frame. Same here.
+2. **Names:** `view.Notifier`, `view.BrowserDeps`, `view.ModuleBrowser`, `view.EntryScreens` keep their current names;
+   `view.Entry` (one entry screen), `view.Demo` (a module's demo) read as plain English.
+3. **Ledger:** concepts ±0 (moved) +2 (`Entry`, `Demo`); files a module touches for its demo −1 (`web/browser/main.go`
+   gone, `seed/demo.go` added); lines at the call site −40 to −100 per demo; ways to do the same thing −1.
+4. **Where:** `view` is the repository that already declares itself the view contract (`README.md`).
+5. **Deletes:** the copies in `layout` and `appkit` (plans L2, L3).
 
-## Stage 1: Replace `ListArgs` with `crud.ReadArgs` Across `view`
+## APIs used
 
-### Files to Modify
-- `go.mod`: require `webtyp.com/crud` (local `replace`, see above).
-- `lister.go`:
-  - Import `"webtyp.com/crud"`.
-  - Change `Lister.List` signature to `List(args crud.ReadArgs, done func(rows []Record, err error))`.
-- `presenter.go`:
-  - Import `"webtyp.com/crud"`.
-  - In `Reload`: replace `ListArgs{Limit: MaxPage}` with `crud.ReadArgs{Limit: crud.MaxPage}` and `ListArgs{Limit: int64(page.First)}` with `crud.ReadArgs{Limit: int64(page.First)}`.
-  - In `Search`: replace `ListArgs{Search: term, Limit: int64(page.Size)}` with `crud.ReadArgs{Search: term, Limit: int64(page.Size)}`.
-  - In `More`: replace `ListArgs{...}` with `crud.ReadArgs{Search: p.term, After: p.order[len(p.order)-1], Limit: int64(page.Size)}`.
-  - In `load`: change parameter `args ListArgs` to `args crud.ReadArgs`.
-- `conformance/conformance.go`:
-  - Import `"webtyp.com/crud"`.
-  - Change `FakeLister.LastArgs` and `FakeLister.List` (plus all minimal `Lister` test doubles in `conformance.go`) from `view.ListArgs` to `crud.ReadArgs`, and `view.MaxPage` to `crud.MaxPage`.
+| Symbol | Signature | Tag |
+|---|---|---|
+| `msgtype.Type` | `type Type uint8` | `msgtype v0.1.0` |
+| `router.Caller` | `interface{ Call(op string, args, reply model.Encodable, done func(error)) }` | `router v0.4.19` |
+| `time.Zone` | value returned by `time.LoadZone(name string) (time.Zone, error)` | `time v0.6.4` |
+| `crud.Module` | `interface{ model.ModuleNaming; MountOperations(reg crud.Registry) }` | `crud v0.0.3` |
+| `ddl.Step` | `struct{ Name string; Run func(conn ddl.Execer, compiler ddl.Compiler) error }` | `ddl v0.0.46` |
+| `dom.Component`, `*dom.SignalString` | as in `dom v0.13.29` | |
 
-## Stage 2: Standardize `view.Ops` and `NewCallerLister` on `model.Action` and `crud.*Args`
+If a signature in the published tag differs from this table, stop and name the symbol; never adapt it by guessing.
 
-### Files to Modify
-- `caller_lister.go`:
-  - Import `"webtyp.com/crud"`.
-  - Replace `List`, `Save`, `Update`, `Delete` string fields on `Ops` with `Allow model.Action`:
-    ```go
-    type Ops struct {
-    	Module  string
-    	Allow   model.Action // write capabilities (model.Create, model.Update, model.Delete; model.Read is always enabled)
-    	Actions []Action
-    	Page    Page // how much the list loads on open and per search or scroll step; zero = DefaultPage
-    }
-    ```
-  - In `NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) Lister`:
-    - Validate `c != nil`, `c.(*recordsCaller)`, `ops.Module != ""`, `newList != nil`, and `ops.Actions`.
-    - Obtain `sample := newList().Append().(model.Model)`.
-    - Compute the 4 qualified CRUD operation names using `crud.Op(sample, action)`:
-      - `opRead: ops.Module + "." + crud.Op(sample, model.Read)`
-      - `opCreate: ops.Module + "." + crud.Op(sample, model.Create)`
-      - `opUpdate: ops.Module + "." + crud.Op(sample, model.Update)`
-      - `opDelete: ops.Module + "." + crud.Op(sample, model.Delete)`
-    - Determine capabilities from `ops.Allow`:
-      - `hasS := ops.Allow.Has(model.Create)`
-      - `hasU := ops.Allow.Has(model.Update)`
-      - `hasD := ops.Allow.Has(model.Delete)`
-  - In `(*callerLister).list(args crud.ReadArgs, done func([]Record, error))`: call `b.caller.Call(b.opRead, &args, dec, ...)`.
-  - In `(*callerLister).save(recs []model.Model, done func(error))`: call `b.caller.Call(b.opCreate, &crud.CreateArgs{Records: recs}, saved, ...)`.
-  - In `(*callerLister).update(ids []string, rec model.Model, fields []string, done func(error))`: call `b.caller.Call(b.opUpdate, &crud.UpdateArgs{IDs: ids, Fields: fields, Record: rec}, nil, done)`.
-  - In `(*callerLister).delete(ids []string, done func(error))`: call `b.caller.Call(b.opDelete, &crud.DeleteArgs{IDs: ids}, nil, ...)`.
-  - Update all 8 capability wrapper `List` methods (`callerList`, `callerSave`, `callerUpdate`, `callerDelete`, `callerSaveUpdate`, `callerSaveDelete`, `callerUpdateDelete`, `callerCRUD`) to take `args crud.ReadArgs`.
-- Update `tests/action_test.go`, `tests/backend_test.go`, `tests/caller_backend_test.go`, `tests/harvest_consumer_test.go`, `tests/module_test.go`, `tests/page_test.go`, `tests/payload_json_test.go`, `tests/plural_test.go`, `tests/records_test.go`, `README.md`, and `docs/SPECS.md` to use `view.Ops{Module: ..., Allow: ...}` and `crud.ReadArgs`.
+## Stage 1 — `notify.go` (new, no build tag)
 
-## Delivery Check
+Copy from `https://github.com/webtyp/layout/blob/main/capabilities.go` exactly: type `Duration` and its methods
+`IsAuto`, `HasTimer`, `Millis`; functions `Auto`, `Persistent`, `For`; interfaces `Notifier`, `UsesNotifier`. Change only
+the package name and the doc comments' `layout.` → `view.`. Imports: `webtyp.com/fmt`, `webtyp.com/msgtype`.
+
+```go
+type Notifier interface {
+	Notify(t msgtype.Type, msg string, d Duration)
+}
+
+// UsesNotifier is a screen component that tells the user «saved» or an error through the chassis.
+//
+//	func (r *RootView) UseNotifier(n view.Notifier) { r.notifier = n }
+type UsesNotifier interface {
+	UseNotifier(n Notifier)
+}
+```
+
+## Stage 2 — `browser.go` (new, no build tag)
+
+```go
+// BrowserDeps is what every module's screens get in the browser. A new need becomes a field here, never a parameter.
+//
+//	Screens: func(d view.BrowserDeps) []view.Screen { return ui.Screens(d.Caller, d.Zone) }
+type BrowserDeps struct {
+	Caller router.Caller
+	Zone   time.Zone
+}
+
+// ModuleBrowser is what a module adds to the browser. Zero on the server.
+type ModuleBrowser struct {
+	Screens func(d BrowserDeps) []Screen
+	Entry   func(d BrowserDeps) EntryScreens // only the entry module (webtyp/access) sets it
+}
+
+// EntryScreens are what the browser shows before the menu. The chassis draws them with the app's name and logo.
+// IdleSeconds locks an idle session (0 = 30 minutes).
+type EntryScreens struct {
+	Login       Entry
+	Setup       Entry // shown while the server has no administrator
+	IdleSeconds int
+}
+
+// Entry is one entry screen as the module fills it: the line under the title, the form, and the message line.
+//
+//	view.Entry{Subtitle: "Enter your key to continue", Form: loginForm.Render(), Message: loginMessage}
+type Entry struct {
+	Subtitle lang.Text
+	Form     dom.Component
+	Message  *dom.SignalString
+}
+```
+
+## Stage 3 — `demo.go` (new, no build tag)
+
+```go
+// Demo is a module's runnable demo: the module built on storage/mem with its seed data, and its screens.
+// The module returns it from seed.Demo(); the webtyp daemon draws it with the chassis. The module never imports layout.
+//
+//	return view.Demo{Label: ui.DefaultLabel, Timezone: "America/Santiago", ActingAs: "u1",
+//		Modules: []crud.Module{mod}, Migrations: []ddl.Step{{Name: chatroom.ModelName, Run: migrate.Migrate}},
+//		Screens: func(d view.BrowserDeps) []view.Screen { return ui.Screens(d.Caller, d.Zone) }}, nil
+type Demo struct {
+	Label      string                       // required: the chassis titles the page "<Label> — demo"
+	Timezone   string                       // required: IANA zone given to the screens as BrowserDeps.Zone
+	ActingAs   string                       // the user id operations see in crud.Caller; "" = signed out
+	Modules    []crud.Module                // required: the operations the screens call
+	Migrations []ddl.Step                   // tables shown in «Database»; nil = no diagram
+	Screens    func(d BrowserDeps) []Screen // required
+}
+
+// Validate reports the first missing required field.
+func (d Demo) Validate() error {
+	switch {
+	case d.Label == "":
+		return ErrDemoNoLabel
+	case d.Timezone == "":
+		return ErrDemoNoTimezone
+	case len(d.Modules) == 0:
+		return ErrDemoNoModules
+	case d.Screens == nil:
+		return ErrDemoNoScreens
+	}
+	return nil
+}
+```
+
+Errors, in the file that already holds this package's errors (`fmt.Err`, translated by `langc`):
+
+```go
+var (
+	ErrDemoNoLabel    = fmt.Err("view.Demo has no Label: the page would have no title; set Label to the module's name")
+	ErrDemoNoTimezone = fmt.Err("view.Demo has no Timezone: dates cannot be shown; set Timezone, e.g. \"America/Santiago\"")
+	ErrDemoNoModules  = fmt.Err("view.Demo has no Modules: every screen would fail to load; add the module built in seed.Demo")
+	ErrDemoNoScreens  = fmt.Err("view.Demo has no Screens: the menu would be empty; set Screens to the module's ui.Screens")
+)
+```
+
+## Stage 4 — tests (`tests/`, rows in `docs/TESTS.md`)
+
+| Test | File | Setup → call → expected |
+|---|---|---|
+| `TestNotify_AutoSizesToWords` | `tests/notify_test.go` | `Auto().Millis("ok")` → `4000`; 40 words → `10000`; `Auto().IsAuto()` → true |
+| `TestNotify_ForAndPersistent` | `tests/notify_test.go` | `For(1500).Millis("x")` → `1500`; `Persistent().HasTimer()` → false, `.Millis("x")` → `0` |
+| `TestDemo_ValidateNamesFirstMissingField` | `tests/demo_test.go` | table: zero `Demo` → `ErrDemoNoLabel`; Label only → `ErrDemoNoTimezone`; + Timezone → `ErrDemoNoModules`; + one fake `crud.Module` → `ErrDemoNoScreens`; complete → `nil` |
+
+The fake `crud.Module` is a struct in the test file with `ModelName() string` and an empty `MountOperations(crud.Registry)`.
+
+## Stage 5 — translations and documentation
+
+`langc sync .`, fill every empty value. `README.md`: add rows to «I want to… → use»: «Tell the user saved/error from a
+custom screen → `view.UsesNotifier`», «Give my module a runnable demo → `seed.Demo() (view.Demo, error)`», «Be the entry
+module (sign-in) → `ModuleBrowser.Entry` returning `view.EntryScreens`». `docs/ARCHITECTURE.md`: one paragraph «Module ↔
+chassis contracts» naming the five types and stating that `view` never imports `layout` or `appkit`.
+
+## Delivery check
 
 ```bash
-langc sync
 gotest
+langc sync .   # zero untranslated, zero reuse warnings
+grep -rn "webtyp.com/layout\|webtyp.com/appkit" --include=*.go .   # empty
 ```
+
+A PR that does not compile, or whose tests could not run, is a failed delivery.
+
+| Stage | Files |
+|---|---|
+| 1 | `notify.go` |
+| 2 | `browser.go` |
+| 3 | `demo.go`, errors file |
+| 4 | `tests/notify_test.go`, `tests/demo_test.go`, `docs/TESTS.md` |
+| 5 | `lang.json`, `README.md`, `docs/ARCHITECTURE.md` |

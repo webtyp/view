@@ -106,14 +106,14 @@ func TestActions(t *testing.T) {
 		recordsCaller := view.NewRecords().Caller(caller)
 		assertPanic(t, "view: NewCallerLister: Action.Op is required", func() {
 			view.NewCallerLister(recordsCaller, view.Ops{
-				Module: "m",
+				Module:  "m",
 				Actions: []view.Action{{Label: "l"}},
 			}, func() model.ModelSlice { return &conformance.MockList{} })
 		})
 
 		assertPanic(t, "view: NewCallerLister: Action.Label is required", func() {
 			view.NewCallerLister(recordsCaller, view.Ops{
-				Module: "m",
+				Module:  "m",
 				Actions: []view.Action{{Op: "o"}},
 			}, func() model.ModelSlice { return &conformance.MockList{} })
 		})

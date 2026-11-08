@@ -1,177 +1,95 @@
 ---
-PLAN: "feat!: listed records are model.Itemizer (generated Item()); Records keeps each item computed once; view.Item removed"
-TAG: v0.6.48
-EXECUTOR: jules
+PLAN: "refactor!: wire contract from webtyp.com/crud; view.Ops on model.Action"
+EXECUTOR: antigravity
 REVIEWER: none
 ---
 
 > Read AGENTS.md at the repo root before any change.
+> **Finish by yourself:** when the delivery check passes, commit after every stage and stop. Never ask whether to
+> proceed. This plan runs **locally**: do not tag, push or publish anything; the owner reviews first.
+> Never run `git reset`, `git restore`, `git checkout -- <file>` or `git stash` on your own work.
 
-<!-- GATE PLAN: executed LOCALLY, third of three (model v0.2.8 → ormc v0.1.26 → view). Needs webtyp.com/model v0.2.8. -->
+# Plan: Extract Wire Contract to `webtyp.com/crud` and Standardize `view.Ops` on `model.Action`
 
-# Plan — `webtyp.com/view`: one item type, computed once, checked by the compiler
+## Tools and local dependencies
 
-## Why
-
-v0.6.47 projects every row at runtime with `model.RowOf` and calls it to read ids inside loops
-(`records.go:37,40,59,70`, `presenter.go:56,85`): O(N²) projections per list, re-run on every filter keystroke,
-and a second type (`view.Item`) translated from `model.Row` (`view.go:18-21`). `webtyp.com/model` v0.2.8 has ONE
-type, `model.Item`, and `ormc` v0.1.26 generates a typed `Item()` per listed model. Here:
-
-- a listed record is `view.Record` = `model.Model` + `model.Itemizer` — `view.New` with a model that has no
-  generated `Item()` does not compile;
-- `Records` computes each record's item **once**, when it is put, and every read uses that cached item;
-- `view.Item` and `itemOf` are deleted: everything speaks `model.Item`.
-
-## Tools
-
-```
+```bash
 go install webtyp.com/devflow/cmd/gotest@latest
 go install webtyp.com/lang/cmd/langc@latest
-go get webtyp.com/model@v0.2.8
 ```
+`go.mod`: `replace` for `webtyp.com/model`, `webtyp.com/router`, `webtyp.com/crud`, `webtyp.com/rpc` to `../model`, `../router`, `../crud`, `../rpc` (local, unpublished); then `go mod tidy`.
+Since master D13, `crud.ReadArgs` has a last field `Filter model.Model`: `view` never sets it (it stays nil); do not add filter UI here.
+Every `webtyp.com/router/loopback` import in `tests/` becomes `crud.Loopback(mods...)` / `crud.LoopbackActingAs(userID, mods...)` (the router package no longer exists), and every test module becomes a `crud.Module` (`MountOperations(reg crud.Registry)`); server-side helpers that called `view.MountSave/MountUpdate/MountDelete` or `crud.MountCreate/...` use `reg.Create/Read/Update/Delete`.
 
-## Ecosystem search
 
-`model.Item`, `model.Itemizer` (model v0.2.8) → reuse; this repo's `view.Item`, `itemOf` and every `model.RowOf`
-call → deleted. Precedent: Apollo/Ember Data normalise on write and read cached entities.
+## Context & Goal
 
-## Design gate
+`webtyp.com/crud` now owns the wire contract between client screens and server handlers (`ReadArgs`, `CreateArgs`, `UpdateArgs`, `DeleteArgs`, `Cap`, `MaxPage`, `Op`, and the closed `crud.Registry` modules mount on). `webtyp.com/view` remains strictly the browser-side presenter and screen library (`Lister` and `List` represent the visual UI list component, while the wire payload is `crud.ReadArgs`).
 
-1. **Prior art.** Apollo `InMemoryCache` and Ember Data compute an entity's identity and fields on write and serve
-   reads from the cache; Go's own generated accessors (sqlc, protoc) over reflection.
-2. **Novice-name test.** `view.Record` — «a record a list can show»; `Presenter.Record() view.Record`.
-3. **Complexity ledger.** Types for one idea 2 → 1 (`view.Item` gone); projections per list O(N²) → N (on put);
-   a model without `Item()` fails at compile time instead of at runtime.
-4. **Where it belongs.** `view` owns the shared copy and the presenters; the item comes from `model` + `ormc`.
-5. **What it deletes.** `view.Item`, `itemOf`, every `model.RowOf` call, `model.Model` as the presenter's record type.
+This plan removes the server/wire duplicates from `view` and updates `view.Ops` / `NewCallerLister` to derive the 4 standard CRUD operation names via `crud.Op(sample, action)` and `model.Action` instead of accepting `List`, `Save`, `Update`, `Delete` string fields.
 
-## APIs used
+## Explicit Deletions
 
-| Symbol | Exact signature | Tag | File |
-|---|---|---|---|
-| `model.Item` | `struct { ID, Label, Description, Badge string }` | model v0.2.8 | `item.go` |
-| `model.Itemizer` | `interface { Item() Item }` | model v0.2.8 | `item.go` |
+Delete these files and symbols completely (no aliases, no shims):
+- Delete `mount.go` (`MountSave`, `MountUpdate`, `MountDelete`).
+- Delete `payload.go` (`saveArgs`, `updateArgs`, `deleteArgs`, `saveIn`, `updateIn`, `deleteIn`, `ErrNoRecords`, `ErrNoIDs`, `ErrNoFields`, `ErrCannotRead`).
+- Delete `tests/mount_test.go` (moved to `webtyp.com/crud/tests/mount_test.go`).
+- In `page.go`: delete `MaxPage`, `Cap`, `ListArgs`, `ListArgsModel`, and all `(*ListArgs)` methods (`Schema`, `Pointers`, `IsNil`, `EncodeFields`, `DecodeFields`). Keep `Page`, `All`, `DefaultPage`, and `Page.declared()`.
+- In `tests/page_test.go`: delete `TestCap` and `TestListArgs_RoundTrip` (moved to `webtyp.com/crud/tests/read_test.go`); keep `TestCallerLister_SendsSearchAndPage`.
 
-## Stage 1 — the listed record (`view.go`, `lister.go`)
+## Stage 1: Replace `ListArgs` with `crud.ReadArgs` Across `view`
 
-```go
-// Record is a record a list can show: a model whose Item() ormc generates from the
-// fields marked Item:… (model.ItemLabel, …). A model without marks has no Item()
-// and cannot be listed — the compiler says so.
-type Record interface {
-	model.Model
-	model.Itemizer
-}
+### Files to Modify
+- `go.mod`: require `webtyp.com/crud` (local `replace`, see above).
+- `lister.go`:
+  - Import `"webtyp.com/crud"`.
+  - Change `Lister.List` signature to `List(args crud.ReadArgs, done func(rows []Record, err error))`.
+- `presenter.go`:
+  - Import `"webtyp.com/crud"`.
+  - In `Reload`: replace `ListArgs{Limit: MaxPage}` with `crud.ReadArgs{Limit: crud.MaxPage}` and `ListArgs{Limit: int64(page.First)}` with `crud.ReadArgs{Limit: int64(page.First)}`.
+  - In `Search`: replace `ListArgs{Search: term, Limit: int64(page.Size)}` with `crud.ReadArgs{Search: term, Limit: int64(page.Size)}`.
+  - In `More`: replace `ListArgs{...}` with `crud.ReadArgs{Search: p.term, After: p.order[len(p.order)-1], Limit: int64(page.Size)}`.
+  - In `load`: change parameter `args ListArgs` to `args crud.ReadArgs`.
+- `conformance/conformance.go`:
+  - Import `"webtyp.com/crud"`.
+  - Change `FakeLister.LastArgs` and `FakeLister.List` (plus all minimal `Lister` test doubles in `conformance.go`) from `view.ListArgs` to `crud.ReadArgs`, and `view.MaxPage` to `crud.MaxPage`.
+
+## Stage 2: Standardize `view.Ops` and `NewCallerLister` on `model.Action` and `crud.*Args`
+
+### Files to Modify
+- `caller_lister.go`:
+  - Import `"webtyp.com/crud"`.
+  - Replace `List`, `Save`, `Update`, `Delete` string fields on `Ops` with `Allow model.Action`:
+    ```go
+    type Ops struct {
+    	Module  string
+    	Allow   model.Action // write capabilities (model.Create, model.Update, model.Delete; model.Read is always enabled)
+    	Actions []Action
+    	Page    Page // how much the list loads on open and per search or scroll step; zero = DefaultPage
+    }
+    ```
+  - In `NewCallerLister(c router.Caller, ops Ops, newList func() model.ModelSlice) Lister`:
+    - Validate `c != nil`, `c.(*recordsCaller)`, `ops.Module != ""`, `newList != nil`, and `ops.Actions`.
+    - Obtain `sample := newList().Append().(model.Model)`.
+    - Compute the 4 qualified CRUD operation names using `crud.Op(sample, action)`:
+      - `opRead: ops.Module + "." + crud.Op(sample, model.Read)`
+      - `opCreate: ops.Module + "." + crud.Op(sample, model.Create)`
+      - `opUpdate: ops.Module + "." + crud.Op(sample, model.Update)`
+      - `opDelete: ops.Module + "." + crud.Op(sample, model.Delete)`
+    - Determine capabilities from `ops.Allow`:
+      - `hasS := ops.Allow.Has(model.Create)`
+      - `hasU := ops.Allow.Has(model.Update)`
+      - `hasD := ops.Allow.Has(model.Delete)`
+  - In `(*callerLister).list(args crud.ReadArgs, done func([]Record, error))`: call `b.caller.Call(b.opRead, &args, dec, ...)`.
+  - In `(*callerLister).save(recs []model.Model, done func(error))`: call `b.caller.Call(b.opCreate, &crud.CreateArgs{Records: recs}, saved, ...)`.
+  - In `(*callerLister).update(ids []string, rec model.Model, fields []string, done func(error))`: call `b.caller.Call(b.opUpdate, &crud.UpdateArgs{IDs: ids, Fields: fields, Record: rec}, nil, done)`.
+  - In `(*callerLister).delete(ids []string, done func(error))`: call `b.caller.Call(b.opDelete, &crud.DeleteArgs{IDs: ids}, nil, ...)`.
+  - Update all 8 capability wrapper `List` methods (`callerList`, `callerSave`, `callerUpdate`, `callerDelete`, `callerSaveUpdate`, `callerSaveDelete`, `callerUpdateDelete`, `callerCRUD`) to take `args crud.ReadArgs`.
+- Update `tests/action_test.go`, `tests/backend_test.go`, `tests/caller_backend_test.go`, `tests/harvest_consumer_test.go`, `tests/module_test.go`, `tests/page_test.go`, `tests/payload_json_test.go`, `tests/plural_test.go`, `tests/records_test.go`, `README.md`, and `docs/SPECS.md` to use `view.Ops{Module: ..., Allow: ...}` and `crud.ReadArgs`.
+
+## Delivery Check
+
+```bash
+langc sync
+gotest
 ```
-
-- Delete `type Item struct{…}` and `itemOf`. Every `Item` in this repo becomes `model.Item`
-  (`Presenter.Items() []model.Item`, `Filter(term string) []model.Item`, `Action` payloads if any).
-- `Presenter.Record() Record`; `New(l Lister, record Record, opts ...Option) Presenter`.
-- `Lister.List(done func(rows []Record, err error))`.
-
-## Stage 2 — `Records` keeps the item (`records.go`)
-
-```go
-type recordEntry struct {
-	item model.Item // computed once, in Put
-	rec  Record
-}
-
-type recordTable struct {
-	name    string
-	entries []recordEntry
-	subs    []func()
-}
-
-// Put inserts or replaces rows by model name and Item().ID, computing each item once.
-func (r *Records) Put(rows ...Record) {
-	var touched []*recordTable
-	for _, row := range rows {
-		t := r.table(row.ModelName())
-		e := recordEntry{item: row.Item(), rec: row}
-		replaced := false
-		for i := range t.entries {
-			if t.entries[i].item.ID == e.item.ID {
-				t.entries[i] = e
-				replaced = true
-				break
-			}
-		}
-		if !replaced {
-			t.entries = append(t.entries, e)
-		}
-		touched = appendTable(touched, t)
-	}
-	notify(touched)
-}
-```
-
-`Remove`, `Get(modelName, id string) (Record, bool)` and `All(modelName string) []Record` compare
-`entries[i].item.ID` (a string compare, never a projection). Add the unexported
-`func (r *Records) items(modelName string) []recordEntry` for the presenter.
-
-## Stage 3 — presenter and lister read cached items (`presenter.go`, `caller_lister.go`)
-
-```go
-func (p *core) Items() []model.Item {
-	entries := p.lister.Records().items(p.record.ModelName())
-	var fresh, listed []model.Item
-	for _, e := range entries {
-		if !containsID(p.order, e.item.ID) {
-			fresh = append(fresh, e.item)
-		}
-	}
-	for _, id := range p.order {
-		for _, e := range entries {
-			if e.item.ID == id {
-				listed = append(listed, e.item)
-				break
-			}
-		}
-	}
-	return append(fresh, listed...)
-}
-```
-
-`Reload`: `p.order = append(p.order, row.Item().ID)` — or better, put first and read the ids from the entries
-just put; either way `Item()` runs once per row per list. `callerLister.list` asserts each decoded row:
-
-```go
-		rec, ok := list.At(i).(Record)
-		if !ok {
-			done(nil, fmt.Err("view: Reload: row type", rowName(list.At(i)), "has no Item(): mark its fields with Item: model.ItemLabel and run ormc"))
-			return
-		}
-```
-
-`callerLister.save` asserts the decoded answer the same way before `Put`. Check:
-`grep -rn "RowOf\|itemOf\|view.Item\b" --include=*.go .` → empty.
-
-## Stage 4 — doubles and tests
-
-- `conformance/conformance.go`: `MockRecord` implements `Item() model.Item` by hand (a test double, not generated):
-  `return model.Item{ID: m.ID, Label: m.Name}`; drop its `Row:` marks. Every double's `List` delivers `[]view.Record`.
-- Update every test to `model.Item`, `[]view.Record`.
-- Add `TestRecords_ItemComputedOncePerPut`: a record type whose `Item()` counts its calls; `Put` 3 rows then call
-  `Get`, `All`, `Items()` many times → the count is 3.
-- Add `TestNew_ListedRecordMustBeItemizer` as a compile-level check in `conformance` (a `var _ view.Record =
-  (*MockRecord)(nil)` line) — no runtime test needed.
-
-## Stage 5 — docs and translations
-
-`README.md`, `docs/SPECS.md`: `view.Record`, `model.Item`, items computed once on put; no `RowOf`, no `view.Item`.
-`langc sync .`; fill every empty value; zero untranslated keys, zero reuse warnings.
-
-## Delivery
-
-- `gotest` green. No `map`, no stdlib `fmt`/`strings`/`errors` in non-test code (WASM).
-- Commit after every stage; never `git reset`, `git restore`, `git checkout -- <file>` or `git stash` on your own work.
-
-| Stage | File | Action |
-|---|---|---|
-| 1 | `view.go`, `lister.go`, `go.mod`, `go.sum` | `view.Record`; `view.Item` gone |
-| 2 | `records.go` | entries with the cached item |
-| 3 | `presenter.go`, `caller_lister.go` | read cached items; assert `Record` |
-| 4 | `conformance/*`, `tests/*` | doubles, once-per-put test |
-| 5 | `README.md`, `docs/SPECS.md`, `lang.json` | document, translate |
