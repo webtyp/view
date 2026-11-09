@@ -2,6 +2,8 @@
 PLAN: "refactor!: view addresses operations with router.Operation, list-wide Actions carry a typed operation, and view holds the layout contract (Brand, Session, Layout)"
 EXECUTOR: jules
 REVIEWER: none
+STATUS: running
+SESSION: 4383676230093526023
 ---
 
 > Read AGENTS.md at the repo root before any change.
