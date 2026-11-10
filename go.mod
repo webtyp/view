@@ -3,7 +3,7 @@ module webtyp.com/view
 go 1.26.8
 
 require (
-	webtyp.com/crud v0.0.10
+	webtyp.com/crud v0.0.11
 	webtyp.com/ddl v0.0.49
 	webtyp.com/dom v0.13.29
 	webtyp.com/fmt v1.0.0
