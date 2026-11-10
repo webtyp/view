@@ -2,14 +2,13 @@
 PLAN: "refactor!: view addresses operations with router.Operation, list-wide Actions carry a typed operation, and view holds the layout contract (Brand, Session, Layout)"
 EXECUTOR: jules
 REVIEWER: none
-STATUS: running
-SESSION: 4383676230093526023
 ---
 
 > Read AGENTS.md at the repo root before any change.
 > **Finish by yourself:** when the delivery check passes, commit after every stage, push and open the pull request. Never ask whether to
 > proceed or finalize — nobody answers, and a session that waits ends without your work.
 > Never run `git reset`, `git restore`, `git checkout -- <file>` or `git stash` on your own work.
+> **Commit after every stage so nothing is lost, and the last step is `git push` and `gh pr create`; your final message is the pull request link, never a question.**
 
 ## Goal
 
@@ -37,7 +36,7 @@ go install webtyp.com/devflow/cmd/gotest@latest
 go install webtyp.com/lang/cmd/langc@latest
 ```
 
-Dependencies (all published, no `replace`): `go get webtyp.com/model@v0.2.18 webtyp.com/router@v0.4.20 webtyp.com/crud@v0.0.8 && go mod tidy`; the `conformance/` and `tests/` packages use the same module (no separate `go.mod`: check with `ls`). **`view` no longer depends on `mcp`** (see the deleted test below): after `go mod tidy`, `webtyp.com/mcp` is gone from `go.mod`.
+Dependencies (all published, no `replace`): `go get webtyp.com/model@v0.2.18 webtyp.com/router@v0.4.21 webtyp.com/crud@v0.0.9 webtyp.com/storage@v0.2.1 && go mod tidy` (`webtyp.com/mcp` v0.3.24 is the published version that compiles with `router.Operation`; if `view` still imports it anywhere after this plan, `go get webtyp.com/mcp@v0.3.24`); the `conformance/` and `tests/` packages use the same module (no separate `go.mod`: check with `ls`). **`view` no longer depends on `mcp`** (see the deleted test below): after `go mod tidy`, `webtyp.com/mcp` is gone from `go.mod`.
 
 ## APIs used
 
