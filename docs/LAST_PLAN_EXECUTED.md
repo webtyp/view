@@ -239,3 +239,4 @@ Commit: `docs: typed operations`.
 | 2 | `action.go`, `presenter.go`, `caller_lister.go`, `demo.go` | `refactor!: …` |
 | 3 | `session.go`, `tests/session_test.go` | `feat: Brand, Session and Layout` |
 | 4 | `lang.json`, `README.md`, `docs/*` | `docs: …` |
+<!-- executed locally: 2026-11-09 -->
