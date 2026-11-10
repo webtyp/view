@@ -12,7 +12,7 @@ import (
 )
 
 type dummyCallerCall struct {
-	op   string
+	op   router.Operation
 	args model.Encodable
 }
 
@@ -20,10 +20,10 @@ type dummyCaller struct {
 	calls []dummyCallerCall
 }
 
-func (c *dummyCaller) Call(op string, args model.Encodable, into model.Decodable, done func(err error)) {
+func (c *dummyCaller) Call(op router.Operation, args model.Encodable, into model.Decodable, done func(err error)) {
 	c.calls = append(c.calls, dummyCallerCall{op: op, args: args})
-	opRead := "m." + crud.Op(&dummyRecord{}, model.Read)
-	if (op == "m.list_op" || op == opRead) && into != nil {
+	opRead := router.Operation{Module: "m", Entity: (&dummyRecord{}).ModelName(), Action: model.Read}
+	if op == opRead && into != nil {
 		if l, ok := into.(*dummyList); ok {
 			a := l.Append().(*dummyRecord)
 			a.id, a.name = "1", "One"
@@ -38,7 +38,7 @@ func (c *dummyCaller) Call(op string, args model.Encodable, into model.Decodable
 	}
 }
 
-func (c *dummyCaller) Dispatch(op string, args model.Encodable) {
+func (c *dummyCaller) Dispatch(op router.Operation, args model.Encodable) {
 	c.calls = append(c.calls, dummyCallerCall{op: op, args: args})
 }
 
@@ -127,9 +127,9 @@ func TestSaveShipsEveryRecordInOneCall(t *testing.T) {
 	if len(caller.calls) != 1 {
 		t.Fatalf("expected 1 caller call, got %d", len(caller.calls))
 	}
-	expectedCreate := "m." + crud.Op(&dummyRecord{}, model.Create)
+	expectedCreate := router.Operation{Module: "m", Entity: (&dummyRecord{}).ModelName(), Action: model.Create}
 	if caller.calls[0].op != expectedCreate {
-		t.Errorf("expected op %q, got %q", expectedCreate, caller.calls[0].op)
+		t.Errorf("expected op %v, got %v", expectedCreate, caller.calls[0].op)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "name", "A") || !conformance.Has(pairs, "name", "B") || !conformance.Has(pairs, "name", "C") {
@@ -178,9 +178,9 @@ func TestUpdateShipsIDsFieldsAndRecord(t *testing.T) {
 	if len(caller.calls) != 1 {
 		t.Fatalf("expected 1 call, got %d", len(caller.calls))
 	}
-	expectedUpdate := "m." + crud.Op(&dummyRecord{}, model.Update)
+	expectedUpdate := router.Operation{Module: "m", Entity: (&dummyRecord{}).ModelName(), Action: model.Update}
 	if caller.calls[0].op != expectedUpdate {
-		t.Errorf("expected op %q, got %q", expectedUpdate, caller.calls[0].op)
+		t.Errorf("expected op %v, got %v", expectedUpdate, caller.calls[0].op)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "ids", "1") || !conformance.Has(pairs, "ids", "2") || !conformance.Has(pairs, "fields", "name") || !conformance.Has(pairs, "name", "Patched") {
@@ -246,9 +246,9 @@ func TestDeleteShipsEveryIDInOneCall(t *testing.T) {
 	if len(caller.calls) != 1 {
 		t.Fatalf("expected 1 call, got %d", len(caller.calls))
 	}
-	expectedDelete := "m." + crud.Op(&dummyRecord{}, model.Delete)
+	expectedDelete := router.Operation{Module: "m", Entity: (&dummyRecord{}).ModelName(), Action: model.Delete}
 	if caller.calls[0].op != expectedDelete {
-		t.Errorf("expected op %q, got %q", expectedDelete, caller.calls[0].op)
+		t.Errorf("expected op %v, got %v", expectedDelete, caller.calls[0].op)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "ids", "1") || !conformance.Has(pairs, "ids", "2") || !conformance.Has(pairs, "ids", "3") {

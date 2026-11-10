@@ -9,6 +9,7 @@ import (
 	"webtyp.com/crud"
 	"webtyp.com/json"
 	"webtyp.com/model"
+	"webtyp.com/router"
 	"webtyp.com/view"
 	"webtyp.com/view/conformance"
 )
@@ -29,7 +30,7 @@ func TestCallerListerSendsValidJSON(t *testing.T) {
 	p.(view.Deleter).Delete([]string{"1"}, func(error) {})
 
 	var sent []recordCall
-	opRead := "m." + crud.Op(&conformance.MockRecord{}, model.Read)
+	opRead := router.Operation{Module: "m", Entity: (&conformance.MockRecord{}).ModelName(), Action: model.Read}
 	for _, c := range caller.calls {
 		if c.op != opRead {
 			sent = append(sent, c)
@@ -41,10 +42,10 @@ func TestCallerListerSendsValidJSON(t *testing.T) {
 	for _, c := range sent {
 		var body []byte
 		if err := json.Encode(c.args, &body); err != nil {
-			t.Fatalf("%s: encode: %v", c.op, err)
+			t.Fatalf("%v: encode: %v", c.op, err)
 		}
 		if !stdjson.Valid(body) {
-			t.Errorf("%s sends invalid JSON: %s", c.op, body)
+			t.Errorf("%v sends invalid JSON: %s", c.op, body)
 		}
 	}
 }

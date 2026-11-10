@@ -5,6 +5,7 @@ import (
 
 	"webtyp.com/crud"
 	"webtyp.com/model"
+	"webtyp.com/router"
 	"webtyp.com/view"
 	"webtyp.com/view/conformance"
 )
@@ -159,7 +160,7 @@ type singleAnswerCaller struct {
 	answer model.Model
 }
 
-func (c *singleAnswerCaller) Call(op string, req model.Encodable, res model.Decodable, done func(error)) {
+func (c *singleAnswerCaller) Call(op router.Operation, req model.Encodable, res model.Decodable, done func(error)) {
 	if res != nil {
 		if rec, ok := res.(*conformance.MockRecord); ok {
 			rec.ID = c.answer.(*conformance.MockRecord).ID
@@ -168,7 +169,7 @@ func (c *singleAnswerCaller) Call(op string, req model.Encodable, res model.Deco
 	}
 	done(nil)
 }
-func (c *singleAnswerCaller) Dispatch(op string, args model.Encodable) {}
+func (c *singleAnswerCaller) Dispatch(op router.Operation, args model.Encodable) {}
 
 func TestCallerLister_SavePutsServerAnswer(t *testing.T) {
 	records := view.NewRecords()

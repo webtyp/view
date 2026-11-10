@@ -8,6 +8,7 @@ import (
 	"webtyp.com/fmt"
 	"webtyp.com/input"
 	"webtyp.com/model"
+	"webtyp.com/router"
 	"webtyp.com/view"
 )
 
@@ -29,7 +30,7 @@ type FakeLister struct {
 	Err           error // returned by every operation, for error-path clauses
 
 	ActionList []view.Action
-	Ran        []string
+	Ran        []router.Operation
 	records    *view.Records
 }
 
@@ -44,7 +45,7 @@ func (b *FakeLister) Actions() []view.Action {
 	return b.ActionList
 }
 
-func (b *FakeLister) RunAction(op string, args model.Encodable, done func(error)) {
+func (b *FakeLister) RunAction(op router.Operation, args model.Encodable, done func(error)) {
 	if b.Err != nil {
 		done(b.Err)
 		return
@@ -229,9 +230,9 @@ type Driver struct {
 	// ActionLabels returns the labels of the action controls, in order.
 	ActionLabels func() []string
 	// ActionEnabled returns true if the action control is enabled.
-	ActionEnabled func(op string) bool
+	ActionEnabled func(op router.Operation) bool
 	// ClickAction clicks the action control.
-	ClickAction func(op string)
+	ClickAction func(op router.Operation)
 	// ConfirmAction accepts the open confirmation; no-op when none is open.
 	ConfirmAction func()
 }
@@ -329,11 +330,14 @@ func (m *MockList) Append() model.Fielder {
 
 // Run executes the full set of conformance clauses.
 func Run(t *testing.T, f Factory) {
+	opA := router.Operation{Module: "m", Entity: "a", Action: model.Create}
+	opB := router.Operation{Module: "m", Entity: "b", Action: model.Create}
+
 	t.Run("actions_render_labels", func(t *testing.T) {
 		fb := &FakeLister{
 			ActionList: []view.Action{
-				{Op: "a", Label: "Action A"},
-				{Op: "b", Label: "Action B"},
+				{Operation: opA, Label: "Action A"},
+				{Operation: opB, Label: "Action B"},
 			},
 		}
 		record := &MockRecord{}
@@ -352,7 +356,7 @@ func Run(t *testing.T, f Factory) {
 		fb := &FakeLister{
 			Rows: []view.Record{},
 			ActionList: []view.Action{
-				{Op: "a", Label: "Action A"},
+				{Operation: opA, Label: "Action A"},
 			},
 		}
 		record := &MockRecord{}
@@ -361,7 +365,7 @@ func Run(t *testing.T, f Factory) {
 		driver := f.New(t, p)
 		driver.Mount() // zero items
 
-		if driver.ActionEnabled("a") {
+		if driver.ActionEnabled(opA) {
 			t.Errorf("expected action 'a' to be disabled without items")
 		}
 
@@ -369,7 +373,7 @@ func Run(t *testing.T, f Factory) {
 		fb.Rows = []view.Record{&MockRecord{ID: "1", Name: "Alice"}}
 		p.Reload(nil)
 
-		if !driver.ActionEnabled("a") {
+		if !driver.ActionEnabled(opA) {
 			t.Errorf("expected action 'a' to be enabled with items")
 		}
 	})
@@ -378,7 +382,7 @@ func Run(t *testing.T, f Factory) {
 		fb := &FakeLister{
 			Rows: []view.Record{&MockRecord{ID: "1", Name: "Alice"}},
 			ActionList: []view.Action{
-				{Op: "a", Label: "Action A"},
+				{Operation: opA, Label: "Action A"},
 			},
 		}
 		record := &MockRecord{}
@@ -387,10 +391,10 @@ func Run(t *testing.T, f Factory) {
 		driver := f.New(t, p)
 		driver.Mount()
 
-		driver.ClickAction("a")
+		driver.ClickAction(opA)
 
-		if len(fb.Ran) != 1 || fb.Ran[0] != "a" {
-			t.Errorf("expected Ran to be ['a'], got %v", fb.Ran)
+		if len(fb.Ran) != 1 || fb.Ran[0] != opA {
+			t.Errorf("expected Ran to be [%v], got %v", opA, fb.Ran)
 		}
 	})
 
@@ -398,7 +402,7 @@ func Run(t *testing.T, f Factory) {
 		fb := &FakeLister{
 			Rows: []view.Record{&MockRecord{ID: "1", Name: "Alice"}},
 			ActionList: []view.Action{
-				{Op: "a", Label: "Action A", Confirm: "Are you sure?"},
+				{Operation: opA, Label: "Action A", Confirm: "Are you sure?"},
 			},
 		}
 		record := &MockRecord{}
@@ -407,14 +411,14 @@ func Run(t *testing.T, f Factory) {
 		driver := f.New(t, p)
 		driver.Mount()
 
-		driver.ClickAction("a")
+		driver.ClickAction(opA)
 		if len(fb.Ran) != 0 {
 			t.Errorf("expected Ran to be empty after click on confirmed action, got %v", fb.Ran)
 		}
 
 		driver.ConfirmAction()
-		if len(fb.Ran) != 1 || fb.Ran[0] != "a" {
-			t.Errorf("expected Ran to be ['a'] after confirmation, got %v", fb.Ran)
+		if len(fb.Ran) != 1 || fb.Ran[0] != opA {
+			t.Errorf("expected Ran to be [%v] after confirmation, got %v", opA, fb.Ran)
 		}
 	})
 

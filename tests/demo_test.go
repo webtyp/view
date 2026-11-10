@@ -5,12 +5,14 @@ import (
 
 	"webtyp.com/crud"
 	"webtyp.com/ddl"
+	"webtyp.com/model"
 	"webtyp.com/view"
 )
 
 type mockDemoModule struct{}
 
 func (m mockDemoModule) ModelName() string                   { return "demo_mod" }
+func (m mockDemoModule) Definition() model.ModuleDefinition { return model.ModuleDefinition{Name: m.ModelName()} }
 func (m mockDemoModule) MountOperations(reg crud.Registry) {}
 
 func TestDemo_ValidateNamesFirstMissingField(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 
 	"webtyp.com/crud"
 	"webtyp.com/model"
+	"webtyp.com/router"
 	"webtyp.com/view"
 	"webtyp.com/view/conformance"
 )
@@ -22,9 +23,9 @@ func TestCallerLister_SendsSearchAndPage(t *testing.T) {
 		t.Fatalf("Page.First 0: opening must not call the list operation, got %v", caller.calls)
 	}
 	p.Search("maria", nil)
-	expectedOp := "m." + crud.Op(&conformance.MockRecord{}, model.Read)
+	expectedOp := router.Operation{Module: "m", Entity: (&conformance.MockRecord{}).ModelName(), Action: model.Read}
 	if len(caller.calls) != 1 || caller.calls[0].op != expectedOp {
-		t.Fatalf("Search: want one call to %s, got %v", expectedOp, caller.calls)
+		t.Fatalf("Search: want one call to %v, got %v", expectedOp, caller.calls)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "search", "maria") || !conformance.Has(pairs, "limit", "20") || !conformance.Has(pairs, "after", "") {

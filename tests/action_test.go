@@ -1,9 +1,11 @@
 package tests
 
 import (
+	"strings"
 	"testing"
 
 	"webtyp.com/model"
+	"webtyp.com/router"
 	"webtyp.com/view"
 	"webtyp.com/view/conformance"
 )
@@ -28,15 +30,17 @@ func TestActions(t *testing.T) {
 		}
 
 		var runErr error
-		a.Run("x", func(err error) {
+		opX := router.Operation{Module: "m", Entity: "x", Action: model.Create}
+		a.Run(opX, func(err error) {
 			runErr = err
 		})
-		if runErr == nil || runErr.Error() != "view: Run: unknown action x" {
-			t.Errorf("expected 'view: Run: unknown action x', got %v", runErr)
+		if runErr == nil || runErr.Error() != "view: Run: unknown action "+opX.String() {
+			t.Errorf("expected 'view: Run: unknown action %s', got %v", opX.String(), runErr)
 		}
 	})
 
 	t.Run("with a fake ActionRunner, Run passes Args built from Reload in order", func(t *testing.T) {
+		opMy := router.Operation{Module: "m", Entity: "my_op", Action: model.Create}
 		fb := &conformance.FakeLister{
 			Rows: []view.Record{
 				&conformance.MockRecord{ID: "1", Name: "Alice"},
@@ -44,8 +48,8 @@ func TestActions(t *testing.T) {
 			},
 			ActionList: []view.Action{
 				{
-					Op:    "my_op",
-					Label: "My Action",
+					Operation: opMy,
+					Label:     "My Action",
 					Args: func(records []model.Model) model.Encodable {
 						return &conformance.MockRecord{Name: "args_built"}
 					},
@@ -59,13 +63,13 @@ func TestActions(t *testing.T) {
 		initialCalls := fb.Calls
 
 		var runErr error
-		p.(view.Actioner).Run("my_op", func(err error) { runErr = err })
+		p.(view.Actioner).Run(opMy, func(err error) { runErr = err })
 
 		if runErr != nil {
 			t.Fatalf("unexpected error running action: %v", runErr)
 		}
 
-		if len(fb.Ran) != 1 || fb.Ran[0] != "my_op" {
+		if len(fb.Ran) != 1 || fb.Ran[0] != opMy {
 			t.Errorf("expected my_op to have run, got %v", fb.Ran)
 		}
 
@@ -77,34 +81,35 @@ func TestActions(t *testing.T) {
 	t.Run("NewCallerLister ops slice is unchanged and calls correct op", func(t *testing.T) {
 		caller := &testCaller{}
 		recordsCaller := view.NewRecords().Caller(caller)
+		opApply := router.Operation{Module: "network_manager", Entity: "apply_network", Action: model.Create}
 		ops := view.Ops{
 			Module: "network_manager",
 			Actions: []view.Action{
-				{Op: "apply_network", Label: "Apply"},
+				{Operation: opApply, Label: "Apply"},
 			},
 		}
 		lister := view.NewCallerLister(recordsCaller, ops, func() model.TableSlice { return &conformance.MockList{} })
 
 		// Ensure caller's ops slice is unmodified
-		if ops.Actions[0].Op != "apply_network" {
-			t.Errorf("expected caller's ops slice to remain unmodified, got %s", ops.Actions[0].Op)
+		if ops.Actions[0].Operation != opApply {
+			t.Errorf("expected caller's ops slice to remain unmodified, got %v", ops.Actions[0].Operation)
 		}
 
 		p := view.New(lister, &conformance.MockRecord{})
-		p.(view.Actioner).Run("apply_network", func(err error) {})
+		p.(view.Actioner).Run(opApply, func(err error) {})
 
 		if len(caller.calls) == 0 {
 			t.Fatalf("expected caller.Call to be invoked")
 		}
-		if caller.calls[0].op != "network_manager.apply_network" {
-			t.Errorf("expected network_manager.apply_network, got %s", caller.calls[0].op)
+		if caller.calls[0].op != opApply {
+			t.Errorf("expected %v, got %v", opApply, caller.calls[0].op)
 		}
 	})
 
-	t.Run("Panics: empty Op, empty Label", func(t *testing.T) {
+	t.Run("Panics: invalid Operation, empty Label", func(t *testing.T) {
 		caller := &testCaller{}
 		recordsCaller := view.NewRecords().Caller(caller)
-		assertPanic(t, "view: NewCallerLister: Action.Op is required", func() {
+		assertPanic(t, "view: NewCallerLister: Action.Operation must be a valid router.Operation", func() {
 			view.NewCallerLister(recordsCaller, view.Ops{
 				Module:  "m",
 				Actions: []view.Action{{Label: "l"}},
@@ -114,7 +119,7 @@ func TestActions(t *testing.T) {
 		assertPanic(t, "view: NewCallerLister: Action.Label is required", func() {
 			view.NewCallerLister(recordsCaller, view.Ops{
 				Module:  "m",
-				Actions: []view.Action{{Op: "o"}},
+				Actions: []view.Action{{Operation: router.Operation{Module: "m", Entity: "o", Action: model.Create}}},
 			}, func() model.TableSlice { return &conformance.MockList{} })
 		})
 	})
@@ -194,7 +199,7 @@ func (l *listCRUDLister) Update(ids []string, rec model.Model, fields []string, 
 func (l *listCRUDLister) Delete(ids []string, done func(error))                                   {}
 
 type testCallerCall struct {
-	op   string
+	op   router.Operation
 	args model.Encodable
 }
 
@@ -202,11 +207,76 @@ type testCaller struct {
 	calls []testCallerCall
 }
 
-func (c *testCaller) Call(op string, req model.Encodable, res model.Decodable, done func(error)) {
+func (c *testCaller) Call(op router.Operation, req model.Encodable, res model.Decodable, done func(error)) {
 	c.calls = append(c.calls, testCallerCall{op, req})
 	done(nil)
 }
 
-func (c *testCaller) Dispatch(op string, args model.Encodable) {
+func (c *testCaller) Dispatch(op router.Operation, args model.Encodable) {
 	c.calls = append(c.calls, testCallerCall{op, args})
+}
+
+func TestAction_RunCallsTheActionsOwnOperation(t *testing.T) {
+	caller := &testCaller{}
+	recordsCaller := view.NewRecords().Caller(caller)
+	opX := router.Operation{Module: "other_module", Entity: "custom_op", Action: model.Create}
+	ops := view.Ops{
+		Module: "m",
+		Actions: []view.Action{
+			{Operation: opX, Label: "X"},
+		},
+	}
+	lister := view.NewCallerLister(recordsCaller, ops, func() model.TableSlice { return &conformance.MockList{} })
+	runner, ok := lister.(view.ActionRunner)
+	if !ok {
+		t.Fatalf("expected lister to implement ActionRunner")
+	}
+	var called bool
+	runner.RunAction(opX, nil, func(err error) {
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		called = true
+	})
+	if !called {
+		t.Fatal("done was not called")
+	}
+	if len(caller.calls) != 1 || caller.calls[0].op != opX {
+		t.Fatalf("expected caller to receive %v, got %v", opX, caller.calls)
+	}
+}
+
+func TestAction_UnknownOperationIsRefused(t *testing.T) {
+	caller := &testCaller{}
+	recordsCaller := view.NewRecords().Caller(caller)
+	opX := router.Operation{Module: "m", Entity: "x", Action: model.Create}
+	otherOp := router.Operation{Module: "m", Entity: "other", Action: model.Create}
+	ops := view.Ops{
+		Module: "m",
+		Actions: []view.Action{
+			{Operation: opX, Label: "X"},
+		},
+	}
+	lister := view.NewCallerLister(recordsCaller, ops, func() model.TableSlice { return &conformance.MockList{} })
+	runner := lister.(view.ActionRunner)
+	var runErr error
+	runner.RunAction(otherOp, nil, func(err error) {
+		runErr = err
+	})
+	if runErr == nil || !strings.Contains(runErr.Error(), otherOp.String()) {
+		t.Fatalf("expected error containing %q, got %v", otherOp.String(), runErr)
+	}
+}
+
+func TestNewCallerLister_ActionNeedsAValidOperation(t *testing.T) {
+	caller := &testCaller{}
+	recordsCaller := view.NewRecords().Caller(caller)
+	assertPanic(t, "Action.Operation", func() {
+		view.NewCallerLister(recordsCaller, view.Ops{
+			Module: "m",
+			Actions: []view.Action{
+				{Operation: router.Operation{}, Label: "X"},
+			},
+		}, func() model.TableSlice { return &conformance.MockList{} })
+	})
 }

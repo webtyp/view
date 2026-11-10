@@ -12,7 +12,7 @@ import (
 )
 
 type recordCall struct {
-	op   string
+	op   router.Operation
 	args model.Encodable
 }
 
@@ -20,9 +20,10 @@ type recordCaller struct {
 	calls []recordCall
 }
 
-func (c *recordCaller) Call(op string, args model.Encodable, into model.Decodable, done func(err error)) {
+func (c *recordCaller) Call(op router.Operation, args model.Encodable, into model.Decodable, done func(err error)) {
 	c.calls = append(c.calls, recordCall{op: op, args: args})
-	if (op == "m.l" || op == "m.MockRecord_r") && into != nil {
+	opRead := router.Operation{Module: "m", Entity: (&conformance.MockRecord{}).ModelName(), Action: model.Read}
+	if op == opRead && into != nil {
 		if l, ok := into.(*conformance.MockList); ok {
 			a := l.Append().(*conformance.MockRecord)
 			a.ID, a.Name = "1", "Alice"
@@ -33,7 +34,7 @@ func (c *recordCaller) Call(op string, args model.Encodable, into model.Decodabl
 	}
 }
 
-func (c *recordCaller) Dispatch(op string, args model.Encodable) {
+func (c *recordCaller) Dispatch(op router.Operation, args model.Encodable) {
 	c.calls = append(c.calls, recordCall{op: op, args: args})
 }
 
@@ -68,9 +69,9 @@ func TestCallerListerTransport(t *testing.T) {
 	if serr != nil {
 		t.Fatalf("Save failed: %v", serr)
 	}
-	expectedCreate := "m." + crud.Op(&conformance.MockRecord{}, model.Create)
+	expectedCreate := router.Operation{Module: "m", Entity: (&conformance.MockRecord{}).ModelName(), Action: model.Create}
 	if len(caller.calls) != 1 || caller.calls[0].op != expectedCreate {
-		t.Fatalf("expected 1 call to op %q, got %v", expectedCreate, caller.calls)
+		t.Fatalf("expected 1 call to op %v, got %v", expectedCreate, caller.calls)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "name", "Ten") || !conformance.Has(pairs, "name", "Eleven") {
@@ -85,9 +86,9 @@ func TestCallerListerTransport(t *testing.T) {
 	if uerr != nil {
 		t.Fatalf("Update failed: %v", uerr)
 	}
-	expectedUpdate := "m." + crud.Op(&conformance.MockRecord{}, model.Update)
+	expectedUpdate := router.Operation{Module: "m", Entity: (&conformance.MockRecord{}).ModelName(), Action: model.Update}
 	if len(caller.calls) != 1 || caller.calls[0].op != expectedUpdate {
-		t.Fatalf("expected 1 call to op %q, got %v", expectedUpdate, caller.calls)
+		t.Fatalf("expected 1 call to op %v, got %v", expectedUpdate, caller.calls)
 	}
 	pairs = conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "ids", "1") || !conformance.Has(pairs, "ids", "2") || !conformance.Has(pairs, "fields", "name") || !conformance.Has(pairs, "name", "Patched") {
@@ -108,9 +109,9 @@ func TestCallerListerTransport(t *testing.T) {
 	if derr != nil {
 		t.Fatalf("Delete failed: %v", derr)
 	}
-	expectedDelete := "m." + crud.Op(&conformance.MockRecord{}, model.Delete)
+	expectedDelete := router.Operation{Module: "m", Entity: (&conformance.MockRecord{}).ModelName(), Action: model.Delete}
 	if len(caller.calls) != 1 || caller.calls[0].op != expectedDelete {
-		t.Fatalf("expected 1 call to op %q, got %v", expectedDelete, caller.calls)
+		t.Fatalf("expected 1 call to op %v, got %v", expectedDelete, caller.calls)
 	}
 	pairs = conformance.Payload(caller.calls[0].args)
 	if !conformance.Has(pairs, "ids", "1") {
@@ -181,5 +182,48 @@ func TestCallerLister_NoReadPanics(t *testing.T) {
 		return l
 	}
 	view.NewCallerLister(recordsCaller, view.Ops{Module: "m"}, newList)
+}
+
+func TestCallerLister_OperationsAreTypedPerAction(t *testing.T) {
+	caller := &recordCaller{}
+	recordsCaller := view.NewRecords().Caller(caller)
+	b := view.NewCallerLister(recordsCaller, view.Ops{Module: "m"}, newMockList)
+	p := view.New(b, &conformance.MockRecord{}, view.WithTitle("t"))
+
+	entity := (&conformance.MockRecord{}).ModelName()
+
+	// 1. Read
+	p.Reload(nil)
+	wantRead := router.Operation{Module: "m", Entity: entity, Action: model.Read}
+	if len(caller.calls) == 0 || caller.calls[0].op != wantRead {
+		t.Errorf("read: want %v, got %v", wantRead, caller.calls)
+	}
+
+	// 2. Create
+	caller.calls = nil
+	s := p.(view.Saver)
+	s.Save([]model.Model{&conformance.MockRecord{Name: "New"}}, func(error) {})
+	wantCreate := router.Operation{Module: "m", Entity: entity, Action: model.Create}
+	if len(caller.calls) == 0 || caller.calls[0].op != wantCreate {
+		t.Errorf("create: want %v, got %v", wantCreate, caller.calls)
+	}
+
+	// 3. Update
+	caller.calls = nil
+	u := p.(view.Updater)
+	u.Update([]string{"1"}, &conformance.MockRecord{Name: "Upd"}, []string{"name"}, func(error) {})
+	wantUpdate := router.Operation{Module: "m", Entity: entity, Action: model.Update}
+	if len(caller.calls) == 0 || caller.calls[0].op != wantUpdate {
+		t.Errorf("update: want %v, got %v", wantUpdate, caller.calls)
+	}
+
+	// 4. Delete
+	caller.calls = nil
+	d := p.(view.Deleter)
+	d.Delete([]string{"1"}, func(error) {})
+	wantDelete := router.Operation{Module: "m", Entity: entity, Action: model.Delete}
+	if len(caller.calls) == 0 || caller.calls[0].op != wantDelete {
+		t.Errorf("delete: want %v, got %v", wantDelete, caller.calls)
+	}
 }
 

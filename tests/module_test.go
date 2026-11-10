@@ -5,6 +5,7 @@ import (
 
 	"webtyp.com/crud"
 	"webtyp.com/model"
+	"webtyp.com/router"
 	"webtyp.com/router/mock"
 	"webtyp.com/view"
 	"webtyp.com/view/conformance"
@@ -67,14 +68,14 @@ func TestModulePerspective(t *testing.T) {
 	}
 
 	var foundSaveCall bool
-	expectedSave := "m." + crud.Op(record, model.Create)
+	expectedSave := router.Operation{Module: "m", Entity: record.ModelName(), Action: model.Create}
 	for _, call := range caller.Calls {
-		if call.Op == expectedSave {
+		if call.Operation == expectedSave {
 			foundSaveCall = true
 		}
 	}
 	if !foundSaveCall {
-		t.Errorf("expected save call to %s", expectedSave)
+		t.Errorf("expected save call to %v", expectedSave)
 	}
 
 	// 4. Delete -> DeleteOp with ID
@@ -89,14 +90,14 @@ func TestModulePerspective(t *testing.T) {
 	}
 
 	var foundDeleteCall bool
-	expectedDelete := "m." + crud.Op(record, model.Delete)
+	expectedDelete := router.Operation{Module: "m", Entity: record.ModelName(), Action: model.Delete}
 	for _, call := range caller.Calls {
-		if call.Op == expectedDelete {
+		if call.Operation == expectedDelete {
 			foundDeleteCall = true
 		}
 	}
 	if !foundDeleteCall {
-		t.Errorf("expected delete call to %s", expectedDelete)
+		t.Errorf("expected delete call to %v", expectedDelete)
 	}
 
 	// 5. Deselect() -> Selected() is cleared
