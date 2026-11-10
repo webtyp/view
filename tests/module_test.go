@@ -3,7 +3,6 @@ package tests
 import (
 	"testing"
 
-	"webtyp.com/crud"
 	"webtyp.com/model"
 	"webtyp.com/router"
 	"webtyp.com/router/mock"

@@ -3,6 +3,7 @@ package mock
 import (
 	"webtyp.com/fmt"
 	"webtyp.com/model"
+	"webtyp.com/router"
 	"webtyp.com/view"
 )
 
@@ -14,7 +15,7 @@ type Renderer struct {
 	focused     string            // field name New()/Edit() last targeted (see FocusedFieldID)
 	loadedID    string            // id of the record Select loaded ("": a new-record draft) — see Save
 	nextID      int               // minted ids for new-record drafts — see Save
-	openConfirm string            // op of the currently open confirmation dialog ("" = none)
+	openConfirm router.Operation  // op of the currently open confirmation dialog (zero = none)
 }
 
 // New creates a reference renderer instance for a given Presenter.
@@ -150,17 +151,17 @@ func (r *Renderer) ActionLabels() []string {
 }
 
 // ActionEnabled returns true if the action control is enabled.
-func (r *Renderer) ActionEnabled(op string) bool {
+func (r *Renderer) ActionEnabled(op router.Operation) bool {
 	// Disabled when presenter has no items
 	return len(r.p.Items()) > 0
 }
 
 // ClickAction clicks the action control.
-func (r *Renderer) ClickAction(op string) {
+func (r *Renderer) ClickAction(op router.Operation) {
 	if a, ok := r.p.(view.Actioner); ok {
 		actions := a.Actions()
 		for _, act := range actions {
-			if act.Op == op {
+			if act.Operation == op {
 				if string(act.Confirm) != "" {
 					r.openConfirm = op
 				} else {
@@ -174,11 +175,11 @@ func (r *Renderer) ClickAction(op string) {
 
 // ConfirmAction accepts the open confirmation; no-op when none is open.
 func (r *Renderer) ConfirmAction() {
-	if r.openConfirm != "" {
+	if r.openConfirm != (router.Operation{}) {
 		if a, ok := r.p.(view.Actioner); ok {
 			a.Run(r.openConfirm, func(error) {})
 		}
-		r.openConfirm = ""
+		r.openConfirm = router.Operation{}
 	}
 }
 

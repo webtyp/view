@@ -7,26 +7,12 @@ import (
 	"webtyp.com/router"
 )
 
-// Ops names the remote operations a CallerLister invokes, scoped to Module.
-// The 4 CRUD operations are derived automatically via crud.Op(sample, action).
-// Write capabilities are governed by the model's Allow() declaration.
+// Ops names the module a CallerLister talks to. The four CRUD operations are derived from the model:
+// router.Operation{Module: Module, Entity: <the model's name>, Action: …}. Write capabilities are governed by the model's Allow().
 type Ops struct {
 	Module  string
 	Actions []Action
 	Page    Page // how much the list loads on open and per search or scroll step; zero = DefaultPage
-}
-
-// qualified returns a copy of o with every non-empty action op prefixed by Module.
-func (o Ops) qualified() Ops {
-	q := o
-	if len(o.Actions) > 0 {
-		q.Actions = make([]Action, len(o.Actions))
-		for i, a := range o.Actions {
-			q.Actions[i] = a
-			q.Actions[i].Op = o.Module + "." + a.Op
-		}
-	}
-	return q
 }
 
 // NewCallerLister adapts a router.Caller (mcp, http, any transport) to the
@@ -54,8 +40,8 @@ func NewCallerLister(c router.Caller, ops Ops, newList func() model.TableSlice) 
 		panic("view: NewCallerLister: newList is required")
 	}
 	for _, act := range ops.Actions {
-		if act.Op == "" {
-			panic("view: NewCallerLister: Action.Op is required")
+		if !act.Operation.Valid() {
+			panic("view: NewCallerLister: Action.Operation must be a valid router.Operation")
 		}
 		if act.Label == "" {
 			panic("view: NewCallerLister: Action.Label is required")
@@ -68,22 +54,18 @@ func NewCallerLister(c router.Caller, ops Ops, newList func() model.TableSlice) 
 		panic("view: NewCallerLister: " + sample.ModelName() + " does not allow Read — add model.Read to Allow in its model.Definition (and rerun ormc)")
 	}
 
-	opRead := ops.Module + "." + crud.Op(sample, model.Read)
-	opCreate := ops.Module + "." + crud.Op(sample, model.Create)
-	opUpdate := ops.Module + "." + crud.Op(sample, model.Update)
-	opDelete := ops.Module + "." + crud.Op(sample, model.Delete)
-
+	entity := sample.ModelName()
 	cb := &callerLister{
 		caller:     c,
-		ops:        ops.qualified(),
+		ops:        ops,
 		rawActions: ops.Actions,
 		newList:    func() model.ModelSlice { return newList() },
 		records:    rc.records,
-		modelName:  sample.ModelName(),
-		opRead:     opRead,
-		opCreate:   opCreate,
-		opUpdate:   opUpdate,
-		opDelete:   opDelete,
+		modelName:  entity,
+		opRead:     router.Operation{Module: ops.Module, Entity: entity, Action: model.Read},
+		opCreate:   router.Operation{Module: ops.Module, Entity: entity, Action: model.Create},
+		opUpdate:   router.Operation{Module: ops.Module, Entity: entity, Action: model.Update},
+		opDelete:   router.Operation{Module: ops.Module, Entity: entity, Action: model.Delete},
 	}
 
 	hasS := allow.Has(model.Create)
@@ -113,14 +95,14 @@ func NewCallerLister(c router.Caller, ops Ops, newList func() model.TableSlice) 
 type callerLister struct {
 	caller     router.Caller
 	ops        Ops
-	rawActions []Action // The UNPREFIXED bare operations to match p.Run(op)
+	rawActions []Action
 	newList    func() model.ModelSlice
 	records    *Records
 	modelName  string
-	opRead     string
-	opCreate   string
-	opUpdate   string
-	opDelete   string
+	opRead     router.Operation
+	opCreate   router.Operation
+	opUpdate   router.Operation
+	opDelete   router.Operation
 }
 
 func (b *callerLister) Records() *Records { return b.records }
@@ -131,14 +113,13 @@ func (b *callerLister) Actions() []Action {
 	return b.rawActions
 }
 
-func (b *callerLister) RunAction(op string, args model.Encodable, done func(error)) {
+func (b *callerLister) RunAction(op router.Operation, args model.Encodable, done func(error)) {
 	if done == nil {
 		done = func(error) {}
 	}
-	// rawActions and ops.Actions share indexes: ops.Actions[i] is rawActions[i] qualified.
-	for i, act := range b.rawActions {
-		if act.Op == op {
-			b.caller.Call(b.ops.Actions[i].Op, args, nil, done)
+	for _, act := range b.rawActions {
+		if act.Operation == op {
+			b.caller.Call(op, args, nil, done)
 			return
 		}
 	}

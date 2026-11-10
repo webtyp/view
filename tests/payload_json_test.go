@@ -6,7 +6,6 @@ import (
 	stdjson "encoding/json"
 	"testing"
 
-	"webtyp.com/crud"
 	"webtyp.com/json"
 	"webtyp.com/model"
 	"webtyp.com/router"

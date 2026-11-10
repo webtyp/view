@@ -271,7 +271,7 @@ func TestAction_UnknownOperationIsRefused(t *testing.T) {
 func TestNewCallerLister_ActionNeedsAValidOperation(t *testing.T) {
 	caller := &testCaller{}
 	recordsCaller := view.NewRecords().Caller(caller)
-	assertPanic(t, "Action.Operation", func() {
+	assertPanic(t, "view: NewCallerLister: Action.Operation must be a valid router.Operation", func() {
 		view.NewCallerLister(recordsCaller, view.Ops{
 			Module: "m",
 			Actions: []view.Action{

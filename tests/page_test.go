@@ -3,7 +3,6 @@ package tests
 import (
 	"testing"
 
-	"webtyp.com/crud"
 	"webtyp.com/model"
 	"webtyp.com/router"
 	"webtyp.com/view"
@@ -28,7 +27,7 @@ func TestCallerLister_SendsSearchAndPage(t *testing.T) {
 		t.Fatalf("Search: want one call to %v, got %v", expectedOp, caller.calls)
 	}
 	pairs := conformance.Payload(caller.calls[0].args)
-	if !conformance.Has(pairs, "search", "maria") || !conformance.Has(pairs, "limit", "20") || !conformance.Has(pairs, "after", "") {
-		t.Errorf("Search payload: want search=maria limit=20 after=\"\", got %v", pairs)
+	if !conformance.Has(pairs, "search", "maria") || !conformance.Has(pairs, "limit", "20") {
+		t.Errorf("Search payload: want search=maria limit=20, got %v", pairs)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"webtyp.com/fmt"
 	"webtyp.com/lang"
 	"webtyp.com/model"
+	"webtyp.com/router"
 )
 
 var (
@@ -221,7 +222,7 @@ func (c *core) Actions() []Action {
 	return nil
 }
 
-func (c *core) Run(op string, done func(error)) {
+func (c *core) Run(op router.Operation, done func(error)) {
 	if done == nil {
 		done = func(error) {}
 	}
@@ -234,7 +235,7 @@ func (c *core) Run(op string, done func(error)) {
 	actions := runner.Actions()
 	var action *Action
 	for i := range actions {
-		if actions[i].Op == op {
+		if actions[i].Operation == op {
 			action = &actions[i]
 			break
 		}

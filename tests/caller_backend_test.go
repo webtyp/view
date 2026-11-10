@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"webtyp.com/crud"
 	"webtyp.com/model"
 	"webtyp.com/router"
 	"webtyp.com/view"

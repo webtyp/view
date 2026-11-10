@@ -23,7 +23,7 @@ var (
 type Demo struct {
 	Label      string                       // required: the chassis titles the page "<Label> — demo"
 	Timezone   string                       // required: IANA zone given to the screens as BrowserDeps.Zone
-	ActingAs   string                       // the user id operations see in crud.Caller; "" = signed out
+	ActingAs   string                       // the user id operations see in crud.CurrentUser; "" = signed out
 	Modules    []crud.Module                // required: the operations the screens call
 	Migrations []ddl.Step                   // tables shown in «Database»; nil = no diagram
 	Screens    func(d BrowserDeps) []Screen // required
