@@ -1,418 +1,127 @@
 # webtyp/view
 <img src="docs/img/badges.svg">
 
-Tech-agnostic CRUD view contract: a domain module declares its list, record and
-operations; any renderer (DOM, HTMX, SSR, native, headless test) draws it.
+UI-agnostic CRUD view and layout contract for the webtyp ecosystem.
 
-This README is the **official usage document**. It is written so that an agent/LLM with
-no prior context can create or edit a visual component correctly guided only by the
-typed signatures below. If something here requires reading the implementation, that is
-a defect — report it.
+## Why This Exists
 
-## I want to… → use
+Domain modules and rendering engines often suffer from tight coupling: views hard-code DOM/HTML constructs, while rendering libraries depend directly on specific domain models and transports. When transport protocols or rendering targets change, modules must be rewritten.
 
-| I want to… | Use |
+| Without this | With this |
 |---|---|
-| Create a list/detail view for my model | `view.New(lister, &X{}, opts...)` where `lister` implements `view.Lister` |
-| Make my rows appear in the list | Fields marked `Item:…`; `ormc` generates `Item() model.Item` |
-| Enable saving | Add `model.Create` to `Allow` in the model's `Definition` (and rerun `ormc`); on a custom Lister implement `Save(recs []model.Model, done func(error))` — the returned Presenter then satisfies `view.Saver` |
-| Enable field patches | Add `model.Update` to `Allow` in the model's `Definition` (and rerun `ormc`); on a custom Lister implement `Update(ids []string, rec model.Model, fields []string, done func(error))` — the Presenter then satisfies `view.Updater` |
-| Enable deleting | Add `model.Delete` to `Allow` in the model's `Definition` (and rerun `ormc`); on a custom Lister implement `Delete(ids []string, done func(error))` — the returned Presenter then satisfies `view.Deleter` |
-| Know if the view can save/delete (renderer side) | `s, ok := p.(view.Saver)` / `d, ok := p.(view.Deleter)` |
-| Load / refresh the list | `p.Reload(func(err error){ … })` — results arrive asynchronously |
-| Pick a record and get its full model | `m := p.Select(id)` (`nil` if the id is unknown) |
-| Clear the selection | `p.Deselect()` |
-| Search as the user types | `p.Search(term, done)` — runs on the server, `Page.Size` rows at a time |
-| Load the next rows at the end of the scroll | `if p.HasMore() { p.More(done) }` |
-| Declare how much the list loads | `view.Ops{…, Page: view.Page{First: 0, Size: 20, More: true}}` ([page.go](page.go)) |
-| Connect over a transport (mcp, http) | `view.NewCallerLister(records.Caller(caller), view.Ops{…}, newList)` then `view.New(l, &X{}, …)` |
-| Run a command on the whole list | `Ops.Actions` + `presenter.(view.Actioner).Run(op, done)` |
-| Show an error/success message | Renderer's job: branch on the `error` passed to the `done` callback of `Reload`/`Save`/`Delete` |
-| Test a renderer implementation | `conformance.Run(t, factory)` — it must pass every clause |
-| Simulate a view without a browser | `view/mock.Renderer` |
-| Offer my module's screens to the app's menu without importing a renderer | `func Screens(caller router.Caller) []view.Screen` — a list leaf has `ID`, `Label`, `Icon`, `Permission`, `Presenter` (help = `view.WithDescription`); a screen that is not a list sets `Component` (a `dom.Component`) and `Help` instead of `Presenter`; a group has `ID`, `Label`, `Icon`, `Help`, `Children` and no permission of its own. The renderer calls `Screen.Validate()` first |
-| Tell the user saved/error from a custom screen | `view.UsesNotifier` |
-| Give my module a runnable demo | `seed.Demo() (view.Demo, error)` |
-| Be the entry module (sign-in) | `ModuleBrowser.Entry` returning `view.EntryScreens` |
+| Domain screens import specific UI engines (`dom`, `htmx`) | Modules declare abstract presenters; any renderer draws them |
+| String-based operation routing prone to silent runtime typos | Every operation is a typed [`router.Operation`](session.go) verified at compile time |
+| Layout packages import application config and vice-versa | Clean seam via [`Brand`](session.go), [`Session`](session.go) and [`Layout`](session.go) contracts |
 
-## Connecting a view to your data
+## Before You Start
 
-Two cases, side by side.
+- Define your domain model with `model.Definition` and generate helpers with `ormc`.
+- Ensure your model declares allowed actions in `Allow()` (e.g. `model.Read | model.Create`).
+- Wrap client transports with `view.NewRecords().Caller(caller)`.
 
-**In-process** — implement `Lister` (+ the capabilities you have) directly
-on your store. There is no operation name to spell, no envelope to unpack:
+## Step-by-Step Guide
+
+### Step 1: Declare a remote lister with typed operations
+
+Goal: Adapt a `router.Caller` to provide CRUD records and custom actions to the view.
 
 ```go
-type deviceStore struct{ db *orm.DB }
-
-// Every operation is asynchronous: the result is handed to done, which is
-// always non-nil. An in-process store may call it immediately; a transport
-// calls it from its own callback. Never block, never return the result.
-func (s *deviceStore) Page() view.Page { return view.Page{First: view.All} }
-
-func (s *deviceStore) List(args crud.ReadArgs, done func([]model.Model, error)) {
-	var rows []model.Model
-	err := s.db.Query(&Device{}).ReadAll(
-		func() model.Model { return &Device{} },
-		func(m model.Model) { rows = append(rows, m) },
-	)
-	done(rows, err)
-}
-
-func (s *deviceStore) Save(recs []model.Model, done func(error)) {
-	for _, m := range recs {
-		if err := s.upsert(m.(*Device)); err != nil {
-			done(err)
-			return
-		}
-	}
-	done(nil)
-}
-
-func (s *deviceStore) Update(ids []string, rec model.Model, fields []string, done func(error)) {
-	done(s.db.UpdateFields(rec, fields, storage.In("id", anyIDs(ids))))
-}
-
-func (s *deviceStore) Delete(ids []string, done func(error)) {
-	done(s.db.Delete(&Device{}, storage.In("id", anyIDs(ids))))
-}
-
-view.New(&deviceStore{db: deviceDB}, &Device{}, view.WithTitle("Computadores"))
-```
-
-**Remote** — wrap your `router.Caller` transport in the adapter this package
-owns, then build the view over it:
-
-```go
-l := view.NewCallerLister(records.Caller(caller),
-	view.Ops{
-		Module: "device",
-		Actions: []view.Action{{
-			Op: "apply_network", Label: "Apply",
-			Args: func(recs []model.Model) model.Encodable { return &ApplyArgs{Fingerprint: recs[0].(*Device).Plan} },
-		}},
-	},
-	func() model.TableSlice { return &DeviceList{} })
-view.New(l, &Device{}, view.WithTitle("Computadores"))
-```
-
-Capabilities are **methods, not strings** — the renderer paints `+`/`🗑`/`✏`
-from what your lister implements, so a missing method is a compile-time fact.
-There is no string to misspell and no silent success-without-write: if the
-lister does not implement `Save`, the presenter simply is not a `view.Saver`.
-The contract is shared: a lister declares capabilities with
-`view.Saver`/`Updater`/`Deleter` — the same interfaces the renderer asserts on
-the presenter. One name per capability, used on both sides.
-
-## Migration note (v0.5.0 → v0.6.0)
-
-`Lister.List`, `Saver.Save`, `Updater.Update`, `Deleter.Delete` and
-`Presenter.Reload` no longer return an `error` — they take a `done` callback,
-delivered **last**, and every outcome (including validation errors like
-"Save requires at least one record") travels through it. The variadic
-`Save(recs ...model.Model)` / `Delete(ids ...string)` are gone: pass a slice
-(the one-record case is a slice of one).
-
-```go
-// v0.5.0 — synchronous, variadic
-rows, err := lister.List()
-if err != nil { … }
-err = saver.Save(rec1, rec2)
-
-// v0.6.0 — asynchronous, slice + done
-lister.List(func(rows []model.Model, err error) { … })
-saver.Save([]model.Model{rec1, rec2}, func(err error) { … })
-```
-
-The change exists because the old shape blocked a channel over an inherently
-asynchronous transport — a program that **deadlocks on Go WASM** (all goroutines
-asleep) and only works on TinyGo. Every screen built on `view` now requests
-work and paints the result from inside the callback, exactly like a React
-`useEffect` or an Elm `Cmd`.
-
-## Migration note (v0.4.0 → v0.5.0)
-
-`Backend` is now `Lister` — the seam finally follows the verb, like
-`Saver`/`Updater`/`Deleter`. Same for its derivatives: `NewCallerBackend` →
-`NewCallerLister`, `conformance.FakeBackend` → `conformance.FakeLister`.
-Pure renames; signatures and bodies are unchanged.
-
-## Migration note (v0.3.0 → v0.4.0)
-
-`BackendSaver`/`BackendUpdater`/`BackendDeleter` are gone; implement
-`Saver`/`Updater`/`Deleter` instead:
-
-```go
-// v0.3.0
-func (s *deviceStore) Save(recs []model.Model) error
-func (s *deviceStore) Delete(ids []string) error
-
-// v0.4.0 — add the ellipsis; bodies are unchanged
-func (s *deviceStore) Save(recs ...model.Model) error
-func (s *deviceStore) Delete(ids ...string) error
-```
-
-`Update` is unchanged.
-
-## Migration note (from ≤ v0.2.x)
-
-`New` lost `listOp`/`newList`; `WithSaveOp`/`WithUpdateOp`/`WithDeleteOp` and
-`WithArgs` are gone (`WithArgs` had zero call sites). A `router.Caller`
-consumer wraps it in `NewCallerLister`:
-
-```go
-// before
-view.New(caller, &User{}, OpListUsers, func() model.ModelSlice { return &UserList{} },
-	view.WithTitle("Usuarios"), view.WithSaveOp(OpUpsertUser), view.WithDeleteOp(OpDeleteUser))
-
-// after
-l := view.NewCallerLister(caller,
-	view.Ops{Module: "user", List: OpListUsers, Save: OpUpsertUser, Delete: OpDeleteUser},
-	func() model.ModelSlice { return &UserList{} })
-view.New(b, &User{}, view.WithTitle("Usuarios"))
-```
-
-## API Reference
-
-The complete public API of `view`:
-
-```go
-package view
+package main
 
 import (
+	"webtyp.com/fmt"
 	"webtyp.com/model"
 	"webtyp.com/router"
-)
-
-// Record is a record a list can show: a model whose Item() ormc generates from the
-// fields marked Item:… (model.ItemLabel, …).
-type Record interface {
-	model.Model
-	model.Itemizer
-}
-
-// Presenter is the UI-agnostic core behind any CRUD view: list, select, reload.
-// Always present. Save/Update/Delete are separate capabilities (see below).
-type Presenter interface {
-	Title() string
-	SearchPlaceholder() string
-	Record() Record
-
-	Items() []model.Item             // the rows of this presenter's model, newest first
-	Search(term string, done func(error)) // asks the server; "" = back to Reload
-	HasMore() bool
-	More(done func(error))
-
-	// Reload asks the Lister for the records, then projects and indexes them.
-	// The result is asynchronous: done runs once, after List delivers, and the
-	// renderer paints Items() from inside it.
-	Reload(done func(error))
-
-	Selected() string        // currently selected id ("" if none)
-	Select(id string) Record // marks id and returns its record from the internal index; unknown id → nil, selection unchanged
-	Deselect()                    // clears the selection
-
-	// OnChange registers fn to run after any record of this presenter's model
-	// changes in the shared Records (a save from any screen, a sync). A renderer
-	// re-reads Items() inside fn.
-	OnChange(fn func())
-}
-
-// Capabilities. The renderer discovers them by type assertion at the seam.
-// They are only present when the lister implements the matching interface:
-// no Save method ⇒ the returned value has no Save method ⇒ p.(Saver) fails.
-// All three deliver their outcome asynchronously through done (never nil,
-// never blocking) — the same single channel every failure travels.
-type Saver interface {
-	Save(recs []model.Model, done func(error))
-}
-type Updater interface {
-	Update(ids []string, rec model.Model, fields []string, done func(error))
-}
-type Deleter interface {
-	Delete(ids []string, done func(error))
-}
-
-// Lister is what a view needs from the application: the records to show.
-type Lister interface {
-	// List asks for one page: args.Search, args.After (last id shown), args.Limit. The result arrives asynchronously through
-	// done, which is always non-nil; List must NOT block waiting for it.
-	List(args ListArgs, done func(rows []model.Model, err error))
-	Page() Page // how much the list loads on open and per search or scroll step
-}
-
-// Ops names the remote operations a CallerLister invokes. An empty name means
-type Ops struct {
-	Module  string
-	Actions []Action
-	Page    Page // how much the list loads on open and per search or scroll step; zero = DefaultPage
-}
-
-func NewCallerLister(c router.Caller, ops Ops, newList func() model.TableSlice) Lister
-
-// Option is a functional configuration option for New.
-type Option func(*config)
-
-func WithTitle(title string) Option
-func WithSearchPlaceholder(placeholder string) Option
-// WithDescription sets what this view is for (a list that has a real "why it's useful" story).
-func WithDescription(d string) Option
-// WithEmpty sets what to show when the list has no records (a list that can start truly empty).
-func WithEmpty(msg string) Option
-
-// New builds the presenter over a Lister. Mandatory collaborators are
-// positional (the compiler enforces their presence); a nil mandatory value
-// panics at construction — a loud development diagnostic, never a deferred
-// runtime mystery. The Presenter's capabilities MIRROR the lister's.
-func New(l Lister, record model.Model, opts ...Option) Presenter
-```
-
-## Quick Start
-
-### 1. The domain module declares its view (2 steps)
-
-```go
-package catalog
-
-import (
-	"webtyp.com/model"
 	"webtyp.com/view"
 )
 
-// Step 1 — the store implements the domain seam (List + the writes it supports).
-type catalogStore struct{ /* … */ }
+type AgendaRecord struct {
+	ID    string
+	Title string
+}
 
-func (s *catalogStore) Page() view.Page { return view.Page{First: view.All} }
-func (s *catalogStore) List(args crud.ReadArgs, done func([]model.Model, error)) { /* … done(rows, err) */ }
-func (s *catalogStore) Save(recs []model.Model, done func(error)) { /* … done(err) */ }
+func (a *AgendaRecord) ModelName() string     { return "agenda" }
+func (a *AgendaRecord) Item() model.Item      { return model.Item{ID: a.ID, Label: a.Title} }
+func (a *AgendaRecord) Schema() []model.Field { return nil }
+func (a *AgendaRecord) Pointers() []any       { return []any{&a.ID, &a.Title} }
+func (a *AgendaRecord) IsNil() bool           { return a == nil }
 
-// Step 2 — build the presenter. No projection loop, no cache, no fill:
-// the presenter lists through the lister and reads the shared view.Records.
-func NewCatalogView(store *catalogStore) view.Presenter {
-	return view.New(store, &CatalogItem{}, view.WithTitle("Catalog Management"))
+type AgendaList struct {
+	items []*AgendaRecord
+}
+
+func (l *AgendaList) ModelName() string      { return "agenda" }
+func (l *AgendaList) Allow() model.Action    { return model.Read | model.Create }
+func (l *AgendaList) Len() int               { return len(l.items) }
+func (l *AgendaList) At(i int) any           { return l.items[i] }
+func (l *AgendaList) Append() any            { r := &AgendaRecord{}; l.items = append(l.items, r); return r }
+func (l *AgendaList) Schema() []model.Field  { return nil }
+func (l *AgendaList) Pointers() []any        { return nil }
+func (l *AgendaList) IsNil() bool            { return l == nil }
+
+func SetupView(caller router.Caller) view.Presenter {
+	records := view.NewRecords()
+	lister := view.NewCallerLister(
+		records.Caller(caller),
+		view.Ops{
+			Module: "agenda",
+			Actions: []view.Action{
+				{
+					Operation: router.Operation{Module: "agenda", Entity: "post_transition", Action: model.Create},
+					Label:     "Approve",
+				},
+			},
+		},
+		func() model.TableSlice { return &AgendaList{} },
+	)
+	return view.New(lister, &AgendaRecord{}, view.WithTitle("Agenda"))
+}
+
+func main() {
+	fmt.Println("view initialized")
 }
 ```
 
-That is the entire module-side code. `CatalogItem` is generated by `ormc` and
-already satisfies `view.Record` (`model.Model` + `model.Itemizer`).
+Expected result: The presenter is ready for any renderer, offering `Items()`, selection state, and typed actions.
 
-### 2. The renderer wraps the presenter (UI layer)
+### Step 2: Render and run actions from the UI layer
 
-A renderer never imports the domain module. It draws `Items()`, generates form inputs
-from `Record().Schema()`, and discovers capabilities by assertion:
+Goal: Mount the presenter and trigger actions without knowing server transport details.
 
 ```go
-package crudview
+package main
 
-import "webtyp.com/view"
+import (
+	"webtyp.com/fmt"
+	"webtyp.com/model"
+	"webtyp.com/router"
+	"webtyp.com/view"
+)
 
-type Renderer struct{ p view.Presenter }
-
-// Mount: request the list and paint from INSIDE the callback — the result is
-// not available when Reload returns.
-func (r *Renderer) Mount() {
-	r.p.Reload(func(err error) {
-		if err != nil {
-			r.ShowError(err) // messages are the renderer's concern
-			return
-		}
-		r.drawList(r.p.Items())
-	})
-	if _, ok := r.p.(view.Saver); ok {
-		r.drawSaveButton() // only exists if the lister implements Save
-	}
-	if _, ok := r.p.(view.Deleter); ok {
-		r.drawDeleteButton()
+func RunAction(p view.Presenter, op router.Operation) {
+	if a, ok := p.(view.Actioner); ok {
+		a.Run(op, func(err error) {
+			if err != nil {
+				fmt.Println("action failed:", err)
+				return
+			}
+			fmt.Println("action succeeded, list reloaded")
+		})
 	}
 }
 
-func (r *Renderer) OnSaveClicked() {
-	s := r.p.(view.Saver) // safe: the button only exists if the assertion held
-	rec := r.p.Record()
-	r.syncFormToRecord(rec) // explicit, unidirectional: form → record → Save
-	s.Save([]model.Model{rec}, func(err error) {
-		if err != nil {
-			r.ShowError(err)
-			return
-		}
-		r.ShowSuccess()
-	})
-}
-
-func (r *Renderer) OnSearchTyped(term string) {
-	r.p.Search(term, func(error) { r.drawList(r.p.Items()) }) // the server searches
+func main() {
+	fmt.Println("action runner ready")
 }
 ```
 
-## Error model
+Expected result: The operation executes asynchronously and reloads the presenter on success.
 
-- `Reload`, `Save`, `Update`, `Delete` are **asynchronous**: each takes a `done func(error)`
-  (always non-nil) and returns nothing. That callback IS the single user-message
-  channel — validation errors and transport errors alike arrive through it, and the
-  renderer decides how to present them (toast, inline, console). `view` never renders,
-  logs, or swallows messages — there is no `SetLog`, and there is no second way to
-  report a result.
-- `New` and `NewCallerLister` **panic** on nil/empty mandatory collaborators. These are programmer wiring
-  bugs, detected deterministically at startup during development (the `template.Must`
-  pattern). Logging and continuing would return a half-built presenter that crashes far
-  from the cause — a deferred silent failure, which the harness forbids.
-- Misuse that cannot be made a compile error is a loud error, never silence:
-  `Delete` of an unknown id errors (nothing is sent).
+## Documentation Map
 
-## Design Goals
-
-1. **Agnostic to UI technology** — the module never imports `dom`, `form` or `html`;
-   any renderer can draw the contract.
-2. **Agnostic to codec and transport** — in-process consumers import only `model`;
-   the transport's codec decodes into the module's typed list (`model.ModelSlice`)
-   inside `NewCallerLister`, the single place that knows the wire shape.
-3. **Compile-time safety** — mandatory collaborators are positional in `New`;
-   capabilities are method sets, so a view whose lister cannot save simply has
-   no `Save` method to call.
-4. **Callback-based, runtime-agnostic** — `Reload`/`Save`/`Update`/`Delete` take a `done`
-   callback; `view` never blocks and never uses a channel. The async network caller is
-   adopted as-is by `NewCallerLister`, so the same library works on Go WASM and TinyGo
-   alike. The renderer paints from inside the callback.
-5. **Explicit form synchronization** — `Save([]model.Model{…}, done)` takes the synchronized
-   records explicitly: unidirectional data flow, no hidden shared-pointer mutations.
-6. **Glue lives here, once** — projection loop, id→model index, capability wiring
-   and the transport adapter are implemented in this package, not repeated in every module.
-
-## WebAssembly/TinyGo Compatibility
-
-To ensure 100% compatibility with WebAssembly (WASM) and TinyGo targets, standard library packages (such as `fmt`, `encoding/json`, or `encoding/binary`) should be avoided in production code. Use the following tech-agnostic, low-allocation alternatives instead:
-- `webtyp.com/fmt` for formatting and error creation.
-- `webtyp.com/json` for JSON serialization/deserialization.
-- `webtyp.com/binary` for binary protocols.
-
-## Reference and Conformance
-
-- **`view/mock`** — headless reference renderer for browser-less simulation and unit
-  tests.
-- **`view/conformance`** — exports `conformance.Run(t, Factory)` plus the
-  `conformance.FakeLister` typed double. A renderer is correct
-  only if it passes every clause (list load on mount, label rendering via `model.Item`,
-  select/deselect, save/delete capability assertions, filter semantics, loud errors on
-  unknown ids). `conformance.Payload`/`conformance.Has` assert the wire shape a
-  `router.Caller` double saw — the tool for testing the transport path.
-
-## Documentation
-
-- **`AGENTS.md`** — contributor rules: the async callback contract (never
-  block, never channels), WASM/TinyGo restrictions, the capability-wrapper
-  pattern, and testing with `gotest`. Read before touching any code.
-- **`docs/SPECS.md`** — the exact contract: public surface, callback
-  semantics, capability mirroring, every error message word for word, the wire
-  shapes, and the conformance clause list. Every table is a test assertion.
-
-## Serving a screen
-
-The framework provides endpoints to serve screens via `MountSave` and `MountDelete`. This ensures the module never declares `{records}`/`{ids}`.
-
-```go
-view.MountSave(reg, OpUpsertDevice, func(d *Device) error { return m.SaveDevice(d) }).
-    Requires(ResourceDevice, model.Create|model.Update)
-
-view.MountDelete(reg, OpDeleteDevice, m.DeleteDevices).
-    Requires(ResourceDevice, model.Delete)
-```
+| Order | Document | What question it answers & when to read it |
+|---|---|---|
+| 1 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Component architecture, layout contracts and typed operations |
+| 2 | [docs/SPECS.md](docs/SPECS.md) | Exact behavior, capability mirroring and error messages |
+| 3 | [docs/LIST_PAGING.md](docs/LIST_PAGING.md) | Pagination cursors and infinite-scroll mechanics |
+| 4 | [docs/LAST_PLAN_EXECUTED.md](docs/LAST_PLAN_EXECUTED.md) | Specification of the most recent locally executed plan |
