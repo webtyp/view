@@ -7,7 +7,7 @@ require (
 	webtyp.com/ddl v0.0.49
 	webtyp.com/dom v0.13.29
 	webtyp.com/fmt v1.0.0
-	webtyp.com/input v0.0.36
+	webtyp.com/input v0.1.0
 	webtyp.com/json v0.5.40
 	webtyp.com/lang v0.1.16
 	webtyp.com/model v0.2.20
@@ -21,5 +21,6 @@ require (
 	webtyp.com/definitioncheck v0.0.3 // indirect
 	webtyp.com/escape v0.1.0 // indirect
 	webtyp.com/events v0.1.8 // indirect
+	webtyp.com/filetype v0.0.6 // indirect
 	webtyp.com/storage v0.2.1 // indirect
 )
