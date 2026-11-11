@@ -3,16 +3,16 @@ module webtyp.com/view
 go 1.26.8
 
 require (
-	webtyp.com/crud v0.0.11
+	webtyp.com/crud v0.0.15
 	webtyp.com/ddl v0.0.49
 	webtyp.com/dom v0.13.29
 	webtyp.com/fmt v1.0.0
 	webtyp.com/input v0.0.36
 	webtyp.com/json v0.5.40
 	webtyp.com/lang v0.1.16
-	webtyp.com/model v0.2.19
+	webtyp.com/model v0.2.20
 	webtyp.com/msgtype v0.1.0
-	webtyp.com/router v0.4.21
+	webtyp.com/router v0.5.0
 	webtyp.com/time v0.6.4
 )
 
