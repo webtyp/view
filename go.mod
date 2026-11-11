@@ -22,5 +22,5 @@ require (
 	webtyp.com/escape v0.1.0 // indirect
 	webtyp.com/events v0.1.8 // indirect
 	webtyp.com/filetype v0.1.1 // indirect
-	webtyp.com/storage v0.2.1 // indirect
+	webtyp.com/storage v0.2.3 // indirect
 )
