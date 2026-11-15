@@ -3,7 +3,7 @@ module webtyp.com/view
 go 1.26.8
 
 require (
-	webtyp.com/country v0.0.0-00010101000000-000000000000
+	webtyp.com/country v0.0.2
 	webtyp.com/crud v0.0.15
 	webtyp.com/ddl v0.0.49
 	webtyp.com/dom v0.13.29
@@ -25,7 +25,3 @@ require (
 	webtyp.com/filetype v0.1.1 // indirect
 	webtyp.com/storage v0.2.3 // indirect
 )
-
-replace webtyp.com/country => ../country
-
-replace webtyp.com/view => ../view

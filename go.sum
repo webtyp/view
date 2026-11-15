@@ -1,5 +1,7 @@
 webtyp.com/calendar v0.1.0 h1:lI0i74Ghee+fnYDx2P6XFJQKLyJKTeQbg4eT9IK8980=
 webtyp.com/calendar v0.1.0/go.mod h1:lHsVxVDpLBAGKovlPew9d5c0YiMoNQxfUHG8OfXDhHk=
+webtyp.com/country v0.0.2 h1:n7qWj5YvIo8/2YGRwwRumxm+4K04m9pckBzPnp982TE=
+webtyp.com/country v0.0.2/go.mod h1:69HNoCinY7jekTYyAdbuIvnY+FnG4NKhQ2uU90mu5kM=
 webtyp.com/crud v0.0.15 h1:ioOJ3lOYKI7AONrB+pZXnuEoK3vV4NVpP5Jm57wCerU=
 webtyp.com/crud v0.0.15/go.mod h1:7fOHo22sQS6QwP0hIBh4asiBfp3R7ScBFqM6JFEOIGM=
 webtyp.com/ddl v0.0.49 h1:IEjN5vukNkJVeTRveT83jjwHataxfAOqaCK0k3m76g0=
