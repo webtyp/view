@@ -1,6 +1,7 @@
 package view
 
 import (
+	"webtyp.com/fmt"
 	"webtyp.com/lang"
 	"webtyp.com/model"
 )
@@ -24,6 +25,10 @@ type Presenter interface {
 
 	// EmptyMessage is what to show, and what to do, when Items() is empty. "" when WithEmpty was not used.
 	EmptyMessage() lang.Text
+
+	// FieldOptions are the choices an app gave to select, radio or datalist fields of
+	// the record (view.WithOptions); nil when none. The renderer applies them when it builds the form.
+	FieldOptions() []FieldChoices
 	Record() Record
 
 	Items() []model.Item // the listed rows of this presenter's model (plus those saved since), in List order
@@ -104,7 +109,15 @@ type Deleter interface {
 	Delete(ids []string, done func(error))
 }
 
+// FieldChoices are the choices of one field, decided by the app and not by the
+// module: the countries first in a list, say.
+type FieldChoices struct {
+	Field   string // the field's schema name, e.g. "document_country"
+	Options []fmt.KeyValue
+}
+
 type config struct {
+	fieldOptions      []FieldChoices
 	title             string
 	searchPlaceholder lang.Text
 	description       lang.Text
@@ -131,6 +144,12 @@ func WithSearchPlaceholder(placeholder lang.Text) Option {
 // WithDescription sets what this view is for, shown when no record is selected.
 func WithDescription(d lang.Text) Option {
 	return func(c *config) { c.description = d }
+}
+
+// WithOptions gives the choices of a select, radio group or datalist field of
+// the record. The module declares the field; the app decides its choices.
+func WithOptions(field string, opts ...fmt.KeyValue) Option {
+	return func(c *config) { c.fieldOptions = append(c.fieldOptions, FieldChoices{Field: field, Options: opts}) }
 }
 
 // WithEmpty sets what to show, and what to do, when the list has no records yet.
@@ -169,6 +188,7 @@ func New(
 		searchPlaceholder: cfg.searchPlaceholder,
 		description:       cfg.description,
 		emptyMessage:      cfg.emptyMessage,
+		fieldOptions:      cfg.fieldOptions,
 	}
 
 	_, hasS := l.(Saver)

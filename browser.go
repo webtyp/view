@@ -1,6 +1,7 @@
 package view
 
 import (
+	"webtyp.com/country"
 	"webtyp.com/dom"
 	"webtyp.com/lang"
 	"webtyp.com/router"
@@ -11,8 +12,9 @@ import (
 //
 //	Screens: func(d view.BrowserDeps) []view.Screen { return ui.Screens(d.Caller, d.Zone) }
 type BrowserDeps struct {
-	Caller router.Caller
-	Zone   time.Zone
+	Caller    router.Caller
+	Zone      time.Zone
+	Countries country.Catalog // the installation's countries: the default and which come first (App.Countries); zero when the app set none
 }
 
 // ModuleBrowser is what a module adds to the browser. Zero on the server.

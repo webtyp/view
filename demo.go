@@ -1,6 +1,7 @@
 package view
 
 import (
+	"webtyp.com/country"
 	"webtyp.com/crud"
 	"webtyp.com/ddl"
 	"webtyp.com/fmt"
@@ -27,6 +28,7 @@ type Demo struct {
 	Modules    []crud.Module                // required: the operations the screens call
 	Migrations []ddl.Step                   // tables shown in «Database»; nil = no diagram
 	Screens    func(d BrowserDeps) []Screen // required
+	Countries  country.Catalog              // given to the screens as BrowserDeps.Countries; zero when the module needs none
 }
 
 // Validate reports the first missing required field.

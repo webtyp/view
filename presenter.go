@@ -23,6 +23,7 @@ type core struct {
 	searchPlaceholder lang.Text
 	description       lang.Text
 	emptyMessage      lang.Text
+	fieldOptions      []FieldChoices
 
 	order    []string // ids of the listed rows, in List order; ids put later go first
 	selected string
@@ -44,6 +45,10 @@ func (p *core) Description() lang.Text {
 
 func (p *core) EmptyMessage() lang.Text {
 	return p.emptyMessage
+}
+
+func (p *core) FieldOptions() []FieldChoices {
+	return p.fieldOptions
 }
 
 func (p *core) Record() Record {
