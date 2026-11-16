@@ -31,3 +31,21 @@ func TestCallerLister_SendsSearchAndPage(t *testing.T) {
 		t.Errorf("Search payload: want search=maria limit=20, got %v", pairs)
 	}
 }
+
+// searchFirstRecord is conformance.MockRecord declared with ListsOnlyAfterSearch.
+type searchFirstRecord struct{ conformance.MockRecord }
+
+func (*searchFirstRecord) ListsOnlyAfterSearch() bool { return true }
+
+func TestNew_SearchFirstNeedsAnEmptyOpening(t *testing.T) {
+	defer func() {
+		if r := recover(); r != "view: New: the record lists only after a search; its Page.First must be 0" {
+			t.Errorf("panic = %v", r)
+		}
+	}()
+	view.New(&conformance.FakeLister{PageSize: view.Page{First: view.All}}, &searchFirstRecord{})
+}
+
+func TestNew_SearchFirstWithEmptyOpeningIsAccepted(t *testing.T) {
+	view.New(&conformance.FakeLister{PageSize: view.Page{First: 0, Size: 20}}, &searchFirstRecord{})
+}

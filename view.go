@@ -175,6 +175,9 @@ func New(
 	if model.IsNil(record) {
 		panic("view: New: record is required")
 	}
+	if sf, ok := record.(model.SearchFirst); ok && sf.ListsOnlyAfterSearch() && l.Page().declared().First != 0 {
+		panic("view: New: the record lists only after a search; its Page.First must be 0")
+	}
 
 	cfg := &config{}
 	for _, opt := range opts {
