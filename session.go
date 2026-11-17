@@ -19,7 +19,7 @@ type Session struct {
 
 // Layout is the layout an app chose, seen by appkit: it draws a Session. The app's main picks the implementation; appkit never imports it.
 //
-//	appkit.RunBrowser(config.App, config.Browser, layoutapp.New(devtools.Menu()))
+//	browser.Run(config.App, screens.Browser, layoutapp.New(devtools.Menu()))
 type Layout interface {
 	Show(Session)
 }
