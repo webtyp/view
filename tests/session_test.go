@@ -17,14 +17,14 @@ func (l *recordingLayout) Show(s view.Session) {
 func TestLayout_ADrawsWhatItIsGiven(t *testing.T) {
 	var l view.Layout = &recordingLayout{}
 	session := view.Session{
-		Brand:   view.Brand{Name: "acme"},
+		Name:    "acme",
 		Screens: []view.Screen{{ID: "a"}},
 	}
 	l.Show(session)
 
 	rec := l.(*recordingLayout)
-	if rec.got.Brand.Name != "acme" {
-		t.Errorf("expected Brand.Name 'acme', got %q", rec.got.Brand.Name)
+	if rec.got.Name != "acme" {
+		t.Errorf("expected Name 'acme', got %q", rec.got.Name)
 	}
 	if len(rec.got.Screens) != 1 {
 		t.Errorf("expected 1 screen, got %d", len(rec.got.Screens))

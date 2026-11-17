@@ -112,3 +112,18 @@ func TestWithDescriptionAndWithEmptySetCrud(t *testing.T) {
 		t.Errorf("expected presenter to be a view.Deleter")
 	}
 }
+
+func TestWithNewRecord_ExposedByPresenter(t *testing.T) {
+	if p := view.New(&plainLister{}, &dummyRecordForOptions{}); p.NewRecord() != nil {
+		t.Fatal("without WithNewRecord, NewRecord must be nil")
+	}
+	calls := 0
+	p := view.New(&plainLister{}, &dummyRecordForOptions{}, view.WithNewRecord(func() view.Record {
+		calls++
+		return &dummyRecordForOptions{}
+	}))
+	first, second := p.NewRecord(), p.NewRecord()
+	if first == nil || second == nil || calls != 2 {
+		t.Fatalf("NewRecord must call the factory on every call, got %d calls", calls)
+	}
+}

@@ -22,13 +22,13 @@ var (
 //		Modules: []crud.Module{mod}, Migrations: []ddl.Step{{Name: chatroom.ModelName, Run: migrate.Migrate}},
 //		Screens: func(d view.BrowserDeps) []view.Screen { return ui.Screens(d.Caller, d.Zone) }}, nil
 type Demo struct {
-	Label      string                       // required: the chassis titles the page "<Label> — demo"
-	Timezone   string                       // required: IANA zone given to the screens as BrowserDeps.Zone
-	ActingAs   string                       // the user id operations see in crud.CurrentUser; "" = signed out
-	Modules    []crud.Module                // required: the operations the screens call
-	Migrations []ddl.Step                   // tables shown in «Database»; nil = no diagram
-	Screens    func(d BrowserDeps) []Screen // required
-	Countries  country.Catalog              // given to the screens as BrowserDeps.Countries; zero when the module needs none
+	Label           string                       // required: the chassis titles the page "<Label> — demo"
+	Timezone        string                       // required: IANA zone given to the screens as BrowserDeps.Zone
+	ActingAs        string                       // the user id operations see in crud.CurrentUser; "" = signed out
+	Modules         []crud.Module                // required: the operations the screens call
+	Migrations      []ddl.Step                   // tables shown in «Database»; nil = no diagram
+	Screens         func(d BrowserDeps) []Screen // required
+	Countries       country.Catalog              // given to the screens as BrowserDeps.Countries; zero when the module needs none
 }
 
 // Validate reports the first missing required field.

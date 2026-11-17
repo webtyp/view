@@ -24,6 +24,7 @@ type core struct {
 	description       lang.Text
 	emptyMessage      lang.Text
 	fieldOptions      []FieldChoices
+	newRecord         func() Record
 
 	order    []string // ids of the listed rows, in List order; ids put later go first
 	selected string
@@ -49,6 +50,13 @@ func (p *core) EmptyMessage() lang.Text {
 
 func (p *core) FieldOptions() []FieldChoices {
 	return p.fieldOptions
+}
+
+func (p *core) NewRecord() Record {
+	if p.newRecord == nil {
+		return nil
+	}
+	return p.newRecord()
 }
 
 func (p *core) Record() Record {

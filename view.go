@@ -31,6 +31,10 @@ type Presenter interface {
 	FieldOptions() []FieldChoices
 	Record() Record
 
+	// NewRecord is the record a NEW draft starts from (view.WithNewRecord), e.g. with a default document type;
+	// nil when WithNewRecord was not used (the form starts empty).
+	NewRecord() Record
+
 	Items() []model.Item // the listed rows of this presenter's model (plus those saved since), in List order
 
 	// Reload loads what the list shows on open (the Lister's Page.First: 0 = nothing until a search, All = every
@@ -117,6 +121,7 @@ type FieldChoices struct {
 }
 
 type config struct {
+	newRecord         func() Record
 	fieldOptions      []FieldChoices
 	title             string
 	searchPlaceholder lang.Text
@@ -144,6 +149,11 @@ func WithSearchPlaceholder(placeholder lang.Text) Option {
 // WithDescription sets what this view is for, shown when no record is selected.
 func WithDescription(d lang.Text) Option {
 	return func(c *config) { c.description = d }
+}
+
+// WithNewRecord sets the record a NEW draft starts from: fn returns a fresh one on every call.
+func WithNewRecord(fn func() Record) Option {
+	return func(c *config) { c.newRecord = fn }
 }
 
 // WithOptions gives the choices of a select, radio group or datalist field of
@@ -192,6 +202,7 @@ func New(
 		description:       cfg.description,
 		emptyMessage:      cfg.emptyMessage,
 		fieldOptions:      cfg.fieldOptions,
+		newRecord:         cfg.newRecord,
 	}
 
 	_, hasS := l.(Saver)
