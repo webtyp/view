@@ -5,7 +5,7 @@ go 1.26.8
 require (
 	webtyp.com/country v0.0.2
 	webtyp.com/crud v0.0.15
-	webtyp.com/ddl v0.0.49
+	webtyp.com/ddl v0.0.59
 	webtyp.com/dom v0.13.29
 	webtyp.com/fmt v1.0.3
 	webtyp.com/input v0.2.4
@@ -23,5 +23,5 @@ require (
 	webtyp.com/escape v0.1.0 // indirect
 	webtyp.com/events v0.1.8 // indirect
 	webtyp.com/filetype v0.1.1 // indirect
-	webtyp.com/storage v0.2.3 // indirect
+	webtyp.com/storage v0.2.8 // indirect
 )
