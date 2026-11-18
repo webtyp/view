@@ -32,18 +32,16 @@ type BrowserDeps struct {
 // ModuleBrowser is what a module adds to the browser. Zero on the server.
 type ModuleBrowser struct {
 	Screens func(d BrowserDeps) []Screen
-	Entry   func(d BrowserDeps) EntryScreens // only the entry module (webtyp/access) sets it
 }
 
-// EntryScreens are what the browser shows before the menu. The chassis draws them with the app's name and logo.
-// IdleSeconds locks an idle session (0 = 30 minutes).
-type EntryScreens struct {
-	Login       Entry
-	Setup       Entry // shown while the server has no administrator
-	IdleSeconds int
+// EntryScreen is what a sign-in mode gives the browser: its entry screen, and open=false when the mode is not open at
+// the door the visit came through (it asks its own route, ARCHITECTURE D78). The chassis draws the screen with the
+// app's name and logo.
+type EntryScreen interface {
+	EntryScreen(d BrowserDeps) (e Entry, open bool, err error)
 }
 
-// Entry is one entry screen as the module fills it: the line under the title, the form, and the message line.
+// Entry is one entry screen as the mode fills it: the line under the title, the form, and the message line.
 //
 //	view.Entry{Subtitle: "Enter your key to continue", Form: loginForm.Render(), Message: loginMessage}
 type Entry struct {

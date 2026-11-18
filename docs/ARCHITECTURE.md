@@ -17,7 +17,7 @@ Every operation a view calls is a typed `router.Operation`:
 | `caller_lister.go` | Remote backend adapter (`NewCallerLister`) invoking `router.Operation` | view |
 | `action.go` | List-wide action definitions (`Action`, `Actioner`, `ActionRunner`) | view |
 | `session.go` | Layout contract between app and renderer (`Brand`, `Session`, `Layout`) | view |
-| `screen.go`, `browser.go` | Navigation menu items and entry screen definitions (`Screen`, `EntryScreens`) | view |
+| `screen.go`, `browser.go` | Navigation menu items and entry screen definitions (`Screen`, `Entry`, `EntryScreen`); who is signed in (`User`) and the `Session` a layout draws | view |
 | `records.go` | Shared client-side reactive store for loaded records | view |
 | `demo.go` | Standalone module demo contract | view |
 
