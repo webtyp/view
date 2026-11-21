@@ -3,6 +3,7 @@ package view
 import (
 	"webtyp.com/country"
 	"webtyp.com/dom"
+	"webtyp.com/events"
 	"webtyp.com/lang"
 	"webtyp.com/model"
 	"webtyp.com/router"
@@ -27,6 +28,11 @@ type BrowserDeps struct {
 	LinkedRecordIDs []string          // record IDs linked to the current account for this module (D2)
 	// OpenForm opens the creation form of another module (D7) and calls onSaved with the created record's id and label.
 	OpenForm func(module string, onSaved func(RecordResult), onCancel func()) dom.Component
+	// Notices are the notices the server sends to the signed-in user (sse.UserNotices): a topic with no data, after
+	// which the screen reads what changed through Caller. nil when nobody is signed in.
+	//
+	//	if d.Notices != nil { d.Notices.Subscribe(clinicalencounter.AgendaChanged, func(events.Event) { reload() }) }
+	Notices events.Subscriber
 }
 
 // ModuleBrowser is what a module adds to the browser. Zero on the server.

@@ -39,8 +39,9 @@ type Screen struct {
 	Label      lang.Text      // menu text
 	Icon       string         // sprite symbol id (the value of an svg.Icon)
 	Permission model.Resource // leaf only: the resource the screen needs
-	Presenter  Presenter      // leaf only: the records the screen lists and edits
-	Component  dom.Component  // leaf only, instead of Presenter: a screen that is not a list (a wizard, a chat)
+	Presenter     Presenter      // leaf only: the records the screen lists and edits
+	OptionSources []Presenter    // optional: presenters that feed Field.Options/Ref selects without adding a menu entry
+	Component     dom.Component  // leaf only, instead of Presenter: a screen that is not a list (a wizard, a chat)
 	Help       lang.Text      // group, or a Component leaf: what the screen is for
 	Children   []Screen       // group only
 }

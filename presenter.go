@@ -25,11 +25,13 @@ type core struct {
 	emptyMessage      lang.Text
 	fieldOptions      []FieldChoices
 	newRecord         func() Record
+	filter            func() model.Model // WithFilter; nil = every row the lister reads
 
 	order    []string // ids of the listed rows, in List order; ids put later go first
 	selected string
 	term     string // the search the listed rows answer ("" = none)
 	more     bool   // the last page was full: the server may have more rows for term
+	known    []string // ids an earlier load listed: never shown again as freshly saved (another filter's rows)
 }
 
 func (p *core) Title() string {
@@ -82,7 +84,7 @@ func (p *core) Items() []model.Item {
 	}
 	var fresh []model.Item
 	for _, e := range entries {
-		if !containsID(p.order, e.item.ID) {
+		if !containsID(p.order, e.item.ID) && !containsID(p.known, e.item.ID) {
 			fresh = append(fresh, e.item)
 		}
 	}
@@ -146,12 +148,22 @@ func (p *core) More(done func(error)) {
 
 // load calls List and records its rows: replacing the listed ones, or after them when appending.
 func (p *core) load(args crud.ReadArgs, appending, paged bool, done func(error)) {
+	if p.filter != nil {
+		args.Filter = p.filter()
+	}
 	p.lister.List(args, func(rows []Record, err error) {
 		if err != nil {
 			done(err)
 			return
 		}
 		if !appending {
+			if p.filter != nil {
+				for _, id := range p.order {
+					if !containsID(p.known, id) {
+						p.known = append(p.known, id)
+					}
+				}
+			}
 			p.order = p.order[:0]
 		}
 		for _, row := range rows {

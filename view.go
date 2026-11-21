@@ -127,6 +127,7 @@ type config struct {
 	searchPlaceholder lang.Text
 	description       lang.Text
 	emptyMessage      lang.Text
+	filter            func() model.Model
 }
 
 // Option is a functional configuration option for New.
@@ -160,6 +161,15 @@ func WithNewRecord(fn func() Record) Option {
 // the record. The module declares the field; the app decides its choices.
 func WithOptions(field string, opts ...fmt.KeyValue) Option {
 	return func(c *config) { c.fieldOptions = append(c.fieldOptions, FieldChoices{Field: field, Options: opts}) }
+}
+
+// WithFilter narrows every read of the list to what filter returns at that moment (crud.ReadArgs.Filter, applied by
+// the entity's Search rule). Change what it returns and call Reload: the list then shows only the new rows, never
+// the ones the previous filter listed.
+//
+//	view.WithFilter(func() model.Model { return &MedicalHistory{PatientId: chosen.PatientId} })
+func WithFilter(filter func() model.Model) Option {
+	return func(c *config) { c.filter = filter }
 }
 
 // WithEmpty sets what to show, and what to do, when the list has no records yet.
@@ -203,6 +213,7 @@ func New(
 		emptyMessage:      cfg.emptyMessage,
 		fieldOptions:      cfg.fieldOptions,
 		newRecord:         cfg.newRecord,
+		filter:            cfg.filter,
 	}
 
 	_, hasS := l.(Saver)
