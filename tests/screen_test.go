@@ -33,17 +33,23 @@ func TestScreen_ValidGroupAndLeaves(t *testing.T) {
 	}
 }
 
-func TestScreen_ValidComponentLeaf(t *testing.T) {
+func TestScreen_ValidCardLeaf(t *testing.T) {
 	leaf := view.Screen{
 		ID:         "booking",
 		Label:      "Booking",
 		Icon:       "booking",
 		Permission: "reservation",
 		Help:       "Book an appointment.",
-		Component:  comp(),
+		Main:       comp(),
 	}
 	if err := leaf.Validate(); err != nil {
-		t.Fatalf("valid component leaf rejected: %v", err)
+		t.Fatalf("valid one-card leaf rejected: %v", err)
+	}
+	twoCards := leaf
+	twoCards.Aside = view.Aside{Controls: comp(), List: comp(), Footer: comp()}
+	twoCards.Focus = view.NewCardFocus()
+	if err := twoCards.Validate(); err != nil {
+		t.Fatalf("valid two-card leaf rejected: %v", err)
 	}
 
 	group := view.Screen{
@@ -54,7 +60,7 @@ func TestScreen_ValidComponentLeaf(t *testing.T) {
 		Children: []view.Screen{leaf},
 	}
 	if err := group.Validate(); err != nil {
-		t.Fatalf("valid group containing component leaf rejected: %v", err)
+		t.Fatalf("valid group containing a card leaf rejected: %v", err)
 	}
 }
 
@@ -68,10 +74,14 @@ func TestScreen_InvalidShapesNameTheScreen(t *testing.T) {
 	badChild := view.Screen{ID: "g", Label: "G", Icon: "g", Help: "h", Children: []view.Screen{noPermission}}
 
 	compBoth := leaf("x")
-	compBoth.Component = comp()
-	compNoHelp := view.Screen{ID: "x", Label: "X", Icon: "x", Permission: "p", Component: comp()}
-	compNoPermission := view.Screen{ID: "x", Label: "X", Icon: "x", Component: comp(), Help: "h"}
-	groupWithComponent := view.Screen{ID: "g", Label: "G", Icon: "g", Help: "h", Component: comp(), Children: []view.Screen{leaf("x")}}
+	compBoth.Main = comp()
+	compNoHelp := view.Screen{ID: "x", Label: "X", Icon: "x", Permission: "p", Main: comp()}
+	compNoPermission := view.Screen{ID: "x", Label: "X", Icon: "x", Main: comp(), Help: "h"}
+	groupWithComponent := view.Screen{ID: "g", Label: "G", Icon: "g", Help: "h", Main: comp(), Children: []view.Screen{leaf("x")}}
+	asideNoMain := leaf("x")
+	asideNoMain.Aside = view.Aside{List: comp()}
+	asideNoList := view.Screen{ID: "x", Label: "X", Icon: "x", Permission: "p", Help: "h", Main: comp(), Aside: view.Aside{Controls: comp()}}
+	focusNoAside := view.Screen{ID: "x", Label: "X", Icon: "x", Permission: "p", Help: "h", Main: comp(), Focus: view.NewCardFocus()}
 
 	cases := []struct {
 		name   string
@@ -81,14 +91,17 @@ func TestScreen_InvalidShapesNameTheScreen(t *testing.T) {
 		{"no id", view.Screen{}, "no ID"},
 		{"no label", view.Screen{ID: "x"}, "no Label: x"},
 		{"no icon", view.Screen{ID: "x", Label: "X"}, "no Icon: x"},
-		{"leaf without presenter", view.Screen{ID: "x", Label: "X", Icon: "x"}, "needs a Presenter or a Component: x"},
-		{"both", compBoth, "both a Presenter and a Component: x"},
-		{"component without help", compNoHelp, "with a Component needs Help: x"},
-		{"component without permission", compNoPermission, "needs a Permission: x"},
+		{"leaf without presenter", view.Screen{ID: "x", Label: "X", Icon: "x"}, "needs a Presenter or a Main card: x"},
+		{"both", compBoth, "both a Presenter and a Main card: x"},
+		{"main without help", compNoHelp, "with a Main card needs Help: x"},
+		{"main without permission", compNoPermission, "needs a Permission: x"},
+		{"aside without main", asideNoMain, "needs a Main card: x"},
+		{"aside without list", asideNoList, "needs its List: x"},
+		{"focus without aside", focusNoAside, "needs an Aside: x"},
 		{"leaf without permission", noPermission, "needs a Permission: x"},
 		{"leaf with Help", leafWithHelp, "not Help: x"},
-		{"group with presenter", groupWithPresenter, "cannot have a Presenter, Component or Permission: g"},
-		{"group with component", groupWithComponent, "cannot have a Presenter, Component or Permission: g"},
+		{"group with presenter", groupWithPresenter, "cannot have a Presenter, cards or Permission: g"},
+		{"group with a card", groupWithComponent, "cannot have a Presenter, cards or Permission: g"},
 		{"group without help", groupNoHelp, "needs Help: g"},
 		{"invalid child", badChild, "needs a Permission: x"},
 	}

@@ -26,16 +26,20 @@ import (
 	"webtyp.com/router"
 )
 
-// Screen is one entry a module offers to the app's menu, declared as data.
-// A Screen is either a leaf (it has a Presenter) or a group (it has Children):
+// Screen is one entry a module offers to the app's menu, declared as data. The renderer
+// draws the same outline around every screen and puts the content in cards it draws:
+// one (Main) or two (Main and Aside); each card scrolls inside itself. A module never
+// draws a frame, a card or a scroll area.
+// A Screen is either a leaf or a group (it has Children):
 //
-//   - list leaf: ID, Label, Icon, Permission and Presenter are required. Its help
-//     text is the Presenter's Description() (view.WithDescription), never a
-//     second copy here.
-//   - component leaf: ID, Label, Icon, Permission, Component and Help are required;
-//     no Presenter. For a screen that is not a list.
+//   - list leaf: ID, Label, Icon, Permission and Presenter are required. The renderer
+//     makes its cards (form as Main, search/list/actions as Aside). Its help text is
+//     the Presenter's Description() (view.WithDescription), never a second copy here.
+//   - card leaf: ID, Label, Icon, Permission, Main and Help are required; Aside
+//     (Controls, List, Footer — List required) and Focus (*CardFocus: which card a
+//     phone shows) are optional. For a screen that is not a list.
 //   - group: ID, Label, Icon, Help and Children are required; it has no
-//     Presenter, Component or Permission of its own — the menu shows it only when
+//     Presenter, cards or Permission of its own — the menu shows it only when
 //     the user may see at least one child, and opening it opens the first one.
 
 // Record is a record a list can show: a model whose Item() ormc generates from the

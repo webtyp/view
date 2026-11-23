@@ -12,51 +12,72 @@ import (
 // crudview) decides HOW. A module that declares its screens this way does not
 // import any renderer, so a renderer release never forces a module release.
 //
-// A Screen is either a leaf (it has a Presenter) or a group (it has Children):
+// The renderer draws the same outline around every screen and puts the content in
+// cards it draws: one (Main) or two (Main and Aside). Each card scrolls inside
+// itself. A module never draws a frame, a card or a scroll area.
 //
-//   - list leaf: ID, Label, Icon, Permission and Presenter are required. Its help
-//     text is the Presenter's Description() (view.WithDescription), never a
-//     second copy here.
-//   - component leaf: ID, Label, Icon, Permission, Component and Help are required;
-//     no Presenter and no Lookups. For a screen that is not a list.
+// A Screen is either a leaf or a group (it has Children):
+//
+//   - list leaf: ID, Label, Icon, Permission and Presenter are required. The
+//     renderer makes its cards (the form as Main, search/list/actions as Aside).
+//     Its help text is the Presenter's Description() (view.WithDescription),
+//     never a second copy here.
+//   - card leaf: ID, Label, Icon, Permission, Main and Help are required; Aside
+//     and Focus are optional. For a screen that is not a list.
 //   - group: ID, Label, Icon, Help and Children are required; it has no
-//     Presenter, Component or Permission of its own — the menu shows it only when
+//     Presenter, cards or Permission of its own — the menu shows it only when
 //     the user may see at least one child, and opening it opens the first one.
 //
 // Example:
 //
-//	func Screens(caller router.Caller) []view.Screen {
-//		return []view.Screen{{
-//			ID: "service_catalog", Label: "Catalog", Icon: "service_catalog", Help: descCatalog,
-//			Children: []view.Screen{{
-//				ID: "service_catalog.services", Label: "Services", Icon: "service_catalog_services",
-//				Permission: "service", Presenter: servicecatalog.NewView(caller),
-//			}},
-//		}}
-//	}
+//	view.Screen{ID: "booking", Label: "Booking", Icon: "booking", Permission: "reservation",
+//		Help: descBooking, Main: bookingFlow}
+//
+//	focus := view.NewCardFocus()
+//	view.Screen{ID: "encounter", Label: "Encounter", Icon: "encounter", Permission: "encounter",
+//		Help: descEncounter, Main: form, Aside: view.Aside{Controls: picker, List: today}, Focus: focus}
 type Screen struct {
-	ID         string         // menu route and identity, unique in the app
-	Label      lang.Text      // menu text
-	Icon       string         // sprite symbol id (the value of an svg.Icon)
-	Permission model.Resource // leaf only: the resource the screen needs
+	ID            string         // menu route and identity, unique in the app
+	Label         lang.Text      // menu text
+	Icon          string         // sprite symbol id (the value of an svg.Icon)
+	Permission    model.Resource // leaf only: the resource the screen needs
 	Presenter     Presenter      // leaf only: the records the screen lists and edits
 	OptionSources []Presenter    // optional: presenters that feed Field.Options/Ref selects without adding a menu entry
-	Component     dom.Component  // leaf only, instead of Presenter: a screen that is not a list (a wizard, a chat)
-	Help       lang.Text      // group, or a Component leaf: what the screen is for
-	Children   []Screen       // group only
+	Main          dom.Component  // leaf only, instead of Presenter: what goes in the main card
+	Aside         Aside          // optional with Main: the side card; the zero value is no side card
+	Focus         *CardFocus     // optional with Aside: lets the module choose which card a phone shows
+	Help          lang.Text      // group, or a card leaf: what the screen is for
+	Children      []Screen       // group only
 }
 
+// Aside is the side card of a screen, in three bands the renderer stacks: Controls on top (a search, a picker),
+// List in the middle (it scrolls inside the card), Footer at the bottom (actions). List is required; Controls and
+// Footer are optional.
+//
+//	view.Aside{Controls: patientPicker, List: todayList}
+type Aside struct {
+	Controls dom.Component
+	List     dom.Component
+	Footer   dom.Component
+}
+
+// isEmpty reports the zero value: the screen has no side card.
+func (a Aside) isEmpty() bool { return a.Controls == nil && a.List == nil && a.Footer == nil }
+
 const (
-	errScreenNoID          = "view: screen has no ID"
-	errScreenNoLabel       = "view: screen has no Label: "
-	errScreenNoIcon        = "view: screen has no Icon: "
-	errLeafNoPresenter     = "view: screen without Children needs a Presenter or a Component: "
-	errLeafBoth            = "view: screen cannot have both a Presenter and a Component: "
-	errLeafNoPermission    = "view: screen with a Presenter needs a Permission: "
-	errLeafHasHelp         = "view: screen with a Presenter takes its help from Presenter.Description (view.WithDescription), not Help: "
-	errComponentNoHelp     = "view: screen with a Component needs Help: "
-	errGroupHasPresenter   = "view: screen with Children cannot have a Presenter, Component or Permission: "
-	errGroupNoHelp         = "view: screen with Children needs Help: "
+	errScreenNoID        = "view: screen has no ID"
+	errScreenNoLabel     = "view: screen has no Label: "
+	errScreenNoIcon      = "view: screen has no Icon: "
+	errLeafNoPresenter   = "view: screen without Children needs a Presenter or a Main card: "
+	errLeafBoth          = "view: screen cannot have both a Presenter and a Main card: "
+	errLeafNoPermission  = "view: screen with a Presenter needs a Permission: "
+	errLeafHasHelp       = "view: screen with a Presenter takes its help from Presenter.Description (view.WithDescription), not Help: "
+	errMainNoHelp        = "view: screen with a Main card needs Help: "
+	errAsideNoMain       = "view: a side card (Aside) needs a Main card: "
+	errAsideNoList       = "view: a side card (Aside) needs its List: "
+	errFocusNoAside      = "view: Focus chooses between two cards and needs an Aside: "
+	errGroupHasPresenter = "view: screen with Children cannot have a Presenter, cards or Permission: "
+	errGroupNoHelp       = "view: screen with Children needs Help: "
 )
 
 // Validate reports the first rule a Screen (and its children) breaks, naming
@@ -75,7 +96,7 @@ func (s Screen) Validate() error {
 		return fmt.Err(errScreenNoIcon + s.ID)
 	}
 	if len(s.Children) > 0 {
-		if s.Presenter != nil || s.Component != nil || s.Permission != "" {
+		if s.Presenter != nil || s.Main != nil || !s.Aside.isEmpty() || s.Focus != nil || s.Permission != "" {
 			return fmt.Err(errGroupHasPresenter + s.ID)
 		}
 		if s.Help == "" {
@@ -88,18 +109,27 @@ func (s Screen) Validate() error {
 		}
 		return nil
 	}
-	if s.Presenter != nil && s.Component != nil {
+	if !s.Aside.isEmpty() && s.Main == nil {
+		return fmt.Err(errAsideNoMain + s.ID)
+	}
+	if s.Presenter != nil && s.Main != nil {
 		return fmt.Err(errLeafBoth + s.ID)
 	}
-	if s.Presenter == nil && s.Component == nil {
+	if s.Presenter == nil && s.Main == nil {
 		return fmt.Err(errLeafNoPresenter + s.ID)
 	}
 	if s.Permission == "" {
 		return fmt.Err(errLeafNoPermission + s.ID)
 	}
-	if s.Component != nil {
+	if s.Main != nil {
 		if s.Help == "" {
-			return fmt.Err(errComponentNoHelp + s.ID)
+			return fmt.Err(errMainNoHelp + s.ID)
+		}
+		if !s.Aside.isEmpty() && s.Aside.List == nil {
+			return fmt.Err(errAsideNoList + s.ID)
+		}
+		if s.Focus != nil && s.Aside.isEmpty() {
+			return fmt.Err(errFocusNoAside + s.ID)
 		}
 		return nil
 	}

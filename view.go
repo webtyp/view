@@ -60,10 +60,12 @@ type Presenter interface {
 	OnChange(fn func())
 }
 
-// Saver creates or replaces WHOLE records. A slice, not a single record: the
-// one-record case is a slice of one, so there is exactly one write path to
-// implement, test and reason about. This is what the "+" new-record flow and
-// the edit-one-record form use.
+// Saver creates NEW records (a create operation): a record that already exists
+// is changed with Updater, never saved again — its id is written only by the
+// server, so a Save with an id is refused ("field written only by the server").
+// A slice, not a single record: the one-record case is a slice of one, so there
+// is exactly one write path to implement, test and reason about. This is what
+// the "+" new-record flow uses; editing a loaded record goes through Updater.
 //
 // The outcome arrives asynchronously through done, which is always non-nil:
 // Save never blocks and returns no error. Every failure — including the
